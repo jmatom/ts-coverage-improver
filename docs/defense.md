@@ -269,13 +269,77 @@ These are decisions made after the spec was satisfied, in service of "would this
 | Concern | What's wired in |
 |---|---|
 | **Long-running analyze blocking HTTP** | `POST /repositories/:id/refresh` returns **HTTP 202** in <100ms; the actual clone+install+tests runs on the per-repo queue worker. Dashboard polls `analysisStatus` (`pending → running → idle/failed`). Same pattern as improvement jobs |
-| **`pending` work lost on process restart** | `RecoverPendingWork` runs at `onModuleInit` after GitHub + sandbox readiness checks. Re-enqueues every `pending` row from the previous process. `running` rows are reconciled to `failed` separately (worker died mid-flight, can't safely resume). Mirror logic for both improvement jobs and analyses |
+| **`pending` work lost on process restart** | `RecoverPendingWork` runs at `onModuleInit` after GitHub + sandbox readiness checks. Re-enqueues every `pending` row from the previous process. `running` rows are handled by a separate **bounded auto-retry** path — see "Reliability — crash recovery story" below |
 | **Duplicate clicks** | Both `POST /jobs` and `POST /refresh` are idempotent: existing in-flight work returns **HTTP 409** (`JOB_ALREADY_IN_FLIGHT` or `ANALYSIS_ALREADY_IN_FLIGHT`) instead of silently double-enqueueing. The dashboard surfaces both as a friendly toast, not an error banner |
 | **Burst load saturating Anthropic / dockerd** | Two typed semaphores (`MAX_CONCURRENT_SANDBOXES=4`, `MAX_CONCURRENT_AI_CALLS=2`) enforce host-bound vs account-bound concurrency caps independently. `MAX_QUEUE_DEPTH=50` admission-control on the API side returns **HTTP 503** if the active-job count crosses it — bounded memory, predictable failure mode |
 | **Event-loop blocking from in-process CPU work** | `monitorEventLoopDelay` polled at 1Hz, warns when worst-case stall ≥ 50ms. Threshold env-configurable. Hot-path `readFileSync`/`existsSync` already converted to `fs/promises` versions |
 | **Monorepo support** | Optional `subpath` at registration. `Repository` aggregate validates (rejects `..` traversal). `AnalyzeRepositoryCoverage` and `RunImprovementJob` split workdir into `cloneRoot` (git ops) vs `packageRoot` (install/tests/AI). Empty subpath = repo root, single-package behavior unchanged |
 
-Each one is small (≤ ~150 LOC), surfaces through a stable env var, and has at least one unit test pinning the behavior. **148/148 tests** across 19 suites.
+Each one is small (≤ ~150 LOC), surfaces through a stable env var, and has at least one unit test pinning the behavior. **165/165 tests** across 21 suites.
+
+---
+
+## Reliability — crash recovery story
+
+The spec line *"resilient job handling and error recovery"* is the highest-stakes reliability bullet. Here's how the system handles a crash today, and what would change for production.
+
+### What actually happens when the backend dies mid-job
+
+Three failure modes converge on the same recovery path:
+
+| Cause | Example | What it leaves behind |
+|---|---|---|
+| Hard kill | `kill -9`, OOMKilled, host reboot, power loss | Row(s) stuck in `running` state |
+| Process panic | Unhandled rejection bubbling past Nest | Row stuck in `running` state |
+| Graceful shutdown | SIGTERM during `docker compose stop` / deploys | Row drained cleanly **if** drain timer wins; otherwise `running` |
+
+In every case, the **on-disk state is the same**: one or more rows with `status = 'running'` and no live worker.
+
+### The invariant that makes recovery free
+
+> *Any row in `running` state at process boot was, by definition, interrupted — because no work is allowed to be `running` while the process isn't alive.*
+
+Every transition into `running` happens on a live worker (`ImprovementJob.start()` / `Repository.markAnalysisRunning()`); every transition out happens before the worker exits its try/catch. So a `running` row at boot is unambiguously a crash.
+
+This is why crash recovery does **not** need a shutdown handler stamping `crashed=1`. The row's existing state is the signal. Hard kills and graceful kills are handled by the same code path. (We *do* run a graceful-shutdown drain anyway, see below — but it's a niceness, not a correctness requirement.)
+
+### Bounded auto-retry: the implementation
+
+At boot, `SqliteConnection.reconcileOrphanRunningJobs` (and its analyses mirror) does **two SQL passes per kind**:
+
+1. **Auto-retry pass** — rows with `auto_retry_count < 1` are flipped back to `pending` (started_at cleared, counter incremented). `RecoverPendingWork` then picks them up the same way it picks up freshly-`pending` rows.
+2. **Hard-fail pass** — rows already at the cap are marked `failed` with `"process restarted mid-execution; auto-retry budget exhausted"`. The user can manually retry from the dashboard.
+
+The cap exists to prevent a **poison job** (one that always crashes the backend) from boot-looping the system. One free auto-retry handles the realistic cases (transient OOM, host migration, unlucky deploy timing); anything that survives that is escalated honestly.
+
+`RunImprovementJob` logs `Resuming after process crash (auto-retry 1/1)` on the recovered run, so the user-visible job log records *why* the run started.
+
+For analyses, the counter lives on the Repository aggregate and is **reset on `markAnalysisRequested`** — each manual re-analyze gets a fresh budget, so a repo that crashed once still benefits from auto-recovery on the next run.
+
+### Graceful shutdown: a niceness, not load-bearing
+
+`app.enableShutdownHooks()` plus `AppModule.onModuleDestroy`:
+- HTTP listener stops accepting new requests (Nest does this before invoking the destroy hook).
+- `InMemoryPerRepoQueue.waitForAllIdle()` awaits all per-repo chains.
+- Capped at `SHUTDOWN_DRAIN_MS` (default 10s) — if the deadline elapses, in-flight rows stay `running` and get auto-recovered on next boot. No state divergence either way.
+
+### Verification
+
+- 5 dedicated SQLite tests: under-budget jobs requeued, exhausted-budget jobs failed, pending/terminal rows untouched, same coverage for analyses, `markAnalysisRequested` resets the analysis counter.
+- 165/165 total tests green.
+
+### What we'd do for production (and why we didn't here)
+
+The current design is the right shape for a single-instance, in-process serialization workload. For a real production deployment, the backing queue would move out-of-process:
+
+| Production target | Why it fits |
+|---|---|
+| **AWS SQS FIFO** with `MessageGroupId=<repositoryId>` | Native per-key serialization (matches our spec invariant exactly), at-least-once delivery, visibility timeout = built-in lease/heartbeat (closes the gap of detecting *hung* — not just *crashed* — workers), DLQ = direct analog of our "auto-retry budget exhausted" bucket. Workers become a stateless horizontally-scalable pool reading from the queue. |
+| **Kafka topics** keyed by `repositoryId` | Better fit when throughput >> SQS limits, when we want event sourcing / replay (re-analyze the entire history), or when downstream services need to consume the same job stream. Per-key ordering via partition key. Heavier ops cost — only worth it once one of those reasons is real. |
+
+For both, the API service stops touching SQLite for queue state — it just publishes a message. Workers consume, run the job, write the *result* to the durable store. That's the textbook decoupled architecture, and the `JobScheduler` / `RepositoryAnalysisScheduler` ports are already shaped for the swap (zero domain or application code changes — only a new infrastructure adapter).
+
+**Why not in the take-home:** an external broker means a new container in `docker-compose.yml`, a new client lib, and the two-phase coordination problem (broker says "delivered", DB save crashes — now they disagree). That coordination is the hard part of brokers and you don't get it for free. With one backend container and SQLite already in the box, the row-as-message approach is the simplest thing that's actually correct, and the seam to upgrade is already cut.
 
 ---
 
@@ -288,7 +352,7 @@ These are honest follow-ups, ordered by value:
 3. **Folder-tree picker on the registration form** — for monorepos, autocomplete the subpath input by querying GitHub's `git/trees?recursive=1` and filtering to directories that contain a `package.json`. ~150 LOC; covered as a future-state in the chat history.
 4. **CI dispatch on PR open** — currently we don't trigger upstream CI; the PR's CI run depends on the upstream's fork-PR policy. A `gh workflow run` after PR open would close the loop.
 5. **Mutation testing as an optional extra gate** — Stryker on the target file would prove the new tests catch real bugs, not just exercise lines. Slow (minutes), so opt-in per repo.
-6. **Multi-process job execution / outbox-style worker** — swap `InMemoryPerRepoQueue` for a SQLite-polling worker (cheapest path) or a real broker (Redis Streams + BullMQ Pro). Useful when one backend can't keep up. The `JobScheduler` and `RepositoryAnalysisScheduler` ports are already shaped for this swap; **zero domain or application code changes needed**.
+6. **Out-of-process queue with worker pool** — swap `InMemoryPerRepoQueue` for SQS FIFO (`MessageGroupId=repositoryId` matches the per-repo serialization invariant natively; visibility timeout = lease; DLQ = budget-exhausted bucket) or Kafka topics keyed by `repositoryId` for higher throughput. Workers become a stateless horizontally-scalable pool. The `JobScheduler` and `RepositoryAnalysisScheduler` ports are already shaped for this swap; **zero domain or application code changes needed**. See "Reliability — crash recovery story" above for the full rationale.
 
 ---
 
