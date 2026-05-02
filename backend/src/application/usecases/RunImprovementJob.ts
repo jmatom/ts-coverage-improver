@@ -1,12 +1,13 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { detectTestConvention } from '../util/detectTestConvention';
 import { findExistingTestPath } from '../util/findExistingTestPath';
 import { scrubAgentConfig } from '../util/scrubAgentConfig';
 import { findSuspectedSecret } from '../util/secretGuard';
 import { CoverageReport } from '@domain/coverage/CoverageReport';
 import { ImprovementJob } from '@domain/job/ImprovementJob';
 import { ImprovementMode } from '@domain/job/JobStatus';
-import { siblingTestPath } from '@domain/job/testFileNaming';
+import { siblingTestPath, TestConvention } from '@domain/job/testFileNaming';
 import { JobRepository } from '@domain/ports/JobRepository';
 import { RepositoryRepository } from '@domain/ports/RepositoryRepository';
 import { CoverageReportRepository } from '@domain/ports/CoverageReportRepository';
@@ -132,6 +133,12 @@ export class RunImprovementJob implements JobExecutor {
       const existingTestPath = await findExistingTestPath(workdir, job.targetFilePath);
       const styleExample = pickStyleExample(workdir, job.targetFilePath, existingTestPath);
 
+      // Detect whether the project uses *.test.* or *.spec.* as its sibling
+      // naming convention. Drives the name of any new test file we ask the
+      // AI to create — matches existing repo style instead of forcing `.test`.
+      const testConvention = await detectTestConvention(workdir);
+      await log(`Project test naming convention: *.${testConvention}.ts`);
+
       // Fast-fail: parse the existing test file BEFORE spawning a sandbox.
       // If it doesn't parse, the repo itself is broken and no AI work will
       // help. Failing here saves an expensive container roundtrip + an AI call.
@@ -187,6 +194,7 @@ export class RunImprovementJob implements JobExecutor {
               mode,
               framework,
               styleExample,
+              convention: testConvention,
               aiEnv,
               retryFeedback: lastFailure === 'no attempts ran' ? undefined : lastFailure,
               log,
@@ -297,6 +305,8 @@ export class RunImprovementJob implements JobExecutor {
     mode: ImprovementMode;
     framework: SupportedTestFramework;
     styleExample: string | null;
+    /** Sibling-file naming convention detected from the project (`test` vs `spec`). */
+    convention: TestConvention;
     aiEnv: Record<string, string>;
     retryFeedback?: string;
     log: (line: string) => Promise<void>;
@@ -307,7 +317,11 @@ export class RunImprovementJob implements JobExecutor {
     const targetTestFile =
       params.mode === 'append' && params.existingTestPath
         ? params.existingTestPath
-        : siblingTestPath(params.job.targetFilePath, params.hadExistingTestAtStart);
+        : siblingTestPath(
+            params.job.targetFilePath,
+            params.hadExistingTestAtStart,
+            params.convention,
+          );
 
     // Pre-AI hardening: drop any agent-config files (CLAUDE.md, .cursor/, …)
     // a malicious target repo (or its postinstall) may have planted to inject
