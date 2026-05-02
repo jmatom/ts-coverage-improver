@@ -61,8 +61,14 @@ export function RepositoryDetailPage() {
   const [toast, setToast] = useState<ToastInput | null>(null);
   const [jobToDelete, setJobToDelete] = useState<Job | null>(null);
   const [deletingJob, setDeletingJob] = useState(false);
+  // Connectivity state for the polling loop. `live` = last poll succeeded.
+  // `reconnecting` = last poll failed (e.g., backend restart in progress —
+  // nginx returns 504 Gateway Timeout while the backend is down). We keep
+  // polling at the normal cadence but show a small indicator instead of an
+  // error banner; user-initiated actions still surface real errors.
+  const [pollState, setPollState] = useState<'live' | 'reconnecting'>('live');
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { silent?: boolean }): Promise<void> => {
     if (!id) return;
     try {
       const [list, repoList, jobList] = await Promise.all([
@@ -73,7 +79,12 @@ export function RepositoryDetailPage() {
       setFiles(list);
       setJobs(jobList);
       setRepo(repoList.find((r) => r.id === id) ?? null);
+      setPollState('live');
     } catch (e) {
+      if (opts?.silent) {
+        setPollState('reconnecting');
+        return;
+      }
       setError(e);
     }
   }, [id, threshold]);
@@ -101,7 +112,9 @@ export function RepositoryDetailPage() {
 
   useEffect(() => {
     if (!thresholdReady) return;
-    void load();
+    // Initial load is silent so a backend that's still booting shows
+    // "Reconnecting…" instead of a hard error banner.
+    void load({ silent: true });
   }, [load, thresholdReady]);
 
   // Poll while any job is in-flight, OR while an analysis is in flight.
@@ -110,12 +123,15 @@ export function RepositoryDetailPage() {
   // minutes), so the dashboard observes progress by polling the repository
   // summary's `analysisStatus`.
   const analyzing = repo?.analysisStatus === 'pending' || repo?.analysisStatus === 'running';
+  // Also poll while the page thinks the connection is broken — keep trying
+  // so the "Reconnecting…" indicator clears as soon as the backend is back,
+  // even if there's no in-flight work to observe.
   useEffect(() => {
     const jobInFlight = jobs.some((j) => j.status === 'pending' || j.status === 'running');
-    if (!jobInFlight && !analyzing) return;
-    const t = setInterval(() => void load(), 3000);
+    if (!jobInFlight && !analyzing && pollState === 'live') return;
+    const t = setInterval(() => void load({ silent: true }), 3000);
     return () => clearInterval(t);
-  }, [jobs, analyzing, load]);
+  }, [jobs, analyzing, pollState, load]);
 
   const onAnalyze = async () => {
     if (!id) return;
@@ -253,6 +269,16 @@ export function RepositoryDetailPage() {
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
+              {pollState === 'reconnecting' && (
+                <span
+                  className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs text-amber-800"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" />
+                  Reconnecting…
+                </span>
+              )}
               <Button
                 onClick={onAnalyze}
                 disabled={analyzing || analyzeSubmitting}
