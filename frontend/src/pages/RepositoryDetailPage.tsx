@@ -121,7 +121,15 @@ export function RepositoryDetailPage() {
       const updated = await api.refreshRepository(id);
       setRepo(updated);
     } catch (e) {
-      setError(e);
+      // Idempotency: if an analysis is already pending or running for this
+      // repo, surface as a transient toast — it's expected, not a bug.
+      // Refresh state via load() so the dashboard catches up.
+      if (e instanceof ApiError && e.code === 'ANALYSIS_ALREADY_IN_FLIGHT') {
+        setToast({ tone: 'info', message: e.message });
+        await load();
+      } else {
+        setError(e);
+      }
     }
   };
 

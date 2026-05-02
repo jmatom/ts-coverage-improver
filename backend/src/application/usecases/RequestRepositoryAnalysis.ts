@@ -1,7 +1,10 @@
 import { Logger } from '@nestjs/common';
 import { RepositoryRepository } from '@domain/ports/RepositoryRepository';
 import { RepositoryAnalysisScheduler } from '@domain/services/RepositoryAnalysisScheduler';
-import { RepositoryNotFoundError } from '@domain/errors/DomainError';
+import {
+  AnalysisAlreadyInFlightError,
+  RepositoryNotFoundError,
+} from '@domain/errors/DomainError';
 import { AnalyzeRepositoryCoverage } from './AnalyzeRepositoryCoverage';
 import { RepositorySummaryDto } from '../dto/Dto';
 
@@ -37,6 +40,16 @@ export class RequestRepositoryAnalysis {
   async execute(input: { repositoryId: string }): Promise<RepositorySummaryDto> {
     const repo = await this.repos.findById(input.repositoryId);
     if (!repo) throw new RepositoryNotFoundError(input.repositoryId);
+
+    // Idempotency: if an analysis is already pending or running for this
+    // repo, refuse the duplicate with HTTP 409 instead of silently
+    // enqueueing a second worker run. The dashboard's button is already
+    // disabled when `analysisStatus` is in flight; this guard catches
+    // direct API callers, tab races, and the small window between a click
+    // and the 202 response arriving back at the browser.
+    if (repo.isAnalyzing) {
+      throw new AnalysisAlreadyInFlightError(repo.id, repo.analysisStatus);
+    }
 
     repo.markAnalysisRequested();
     await this.repos.save(repo);

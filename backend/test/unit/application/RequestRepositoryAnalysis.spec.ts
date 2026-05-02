@@ -1,7 +1,10 @@
 import { Repository } from '../../../src/domain/repository/Repository';
 import { RepositoryRepository } from '../../../src/domain/ports/RepositoryRepository';
 import { RepositoryAnalysisScheduler } from '../../../src/domain/services/RepositoryAnalysisScheduler';
-import { RepositoryNotFoundError } from '../../../src/domain/errors/DomainError';
+import {
+  AnalysisAlreadyInFlightError,
+  RepositoryNotFoundError,
+} from '../../../src/domain/errors/DomainError';
 import { RequestRepositoryAnalysis } from '../../../src/application/usecases/RequestRepositoryAnalysis';
 import { AnalyzeRepositoryCoverage } from '../../../src/application/usecases/AnalyzeRepositoryCoverage';
 
@@ -103,5 +106,68 @@ describe('RequestRepositoryAnalysis', () => {
     // The scheduler-fired callback must not bubble exceptions — the analyze
     // use case marks the repo failed itself; we only log.
     await expect(scheduler.scheduled[0].run()).resolves.toBeUndefined();
+  });
+
+  describe('idempotency guard', () => {
+    it('rejects a duplicate request when status is pending', async () => {
+      const repo = Repository.create({ owner: 'o', name: 'n', defaultBranch: 'main' });
+      repo.markAnalysisRequested();
+      const repos = new FakeRepos(repo);
+      const scheduler = new FakeScheduler();
+      const analyze = new FakeAnalyze() as unknown as AnalyzeRepositoryCoverage;
+      const useCase = new RequestRepositoryAnalysis(repos, scheduler, analyze);
+
+      await expect(useCase.execute({ repositoryId: repo.id })).rejects.toBeInstanceOf(
+        AnalysisAlreadyInFlightError,
+      );
+      // Nothing was persisted or enqueued by the rejected request.
+      expect(repos.saved).toHaveLength(0);
+      expect(scheduler.scheduled).toHaveLength(0);
+    });
+
+    it('rejects a duplicate request when status is running', async () => {
+      const repo = Repository.create({ owner: 'o', name: 'n', defaultBranch: 'main' });
+      repo.markAnalysisRequested();
+      repo.markAnalysisRunning();
+      const repos = new FakeRepos(repo);
+      const scheduler = new FakeScheduler();
+      const analyze = new FakeAnalyze() as unknown as AnalyzeRepositoryCoverage;
+      const useCase = new RequestRepositoryAnalysis(repos, scheduler, analyze);
+
+      await expect(useCase.execute({ repositoryId: repo.id })).rejects.toBeInstanceOf(
+        AnalysisAlreadyInFlightError,
+      );
+      expect(repos.saved).toHaveLength(0);
+      expect(scheduler.scheduled).toHaveLength(0);
+    });
+
+    it('admits a request from idle (initial) state', async () => {
+      const repo = Repository.create({ owner: 'o', name: 'n', defaultBranch: 'main' });
+      const repos = new FakeRepos(repo);
+      const useCase = new RequestRepositoryAnalysis(
+        repos,
+        new FakeScheduler(),
+        new FakeAnalyze() as unknown as AnalyzeRepositoryCoverage,
+      );
+      const dto = await useCase.execute({ repositoryId: repo.id });
+      expect(dto.analysisStatus).toBe('pending');
+    });
+
+    it('admits a retry after a failure (status=failed → pending)', async () => {
+      const repo = Repository.create({ owner: 'o', name: 'n', defaultBranch: 'main' });
+      repo.markAnalysisRequested();
+      repo.markAnalysisRunning();
+      repo.markAnalysisFailed('npm install timed out');
+      const repos = new FakeRepos(repo);
+      const useCase = new RequestRepositoryAnalysis(
+        repos,
+        new FakeScheduler(),
+        new FakeAnalyze() as unknown as AnalyzeRepositoryCoverage,
+      );
+
+      const dto = await useCase.execute({ repositoryId: repo.id });
+      expect(dto.analysisStatus).toBe('pending');
+      expect(dto.analysisError).toBeNull();
+    });
   });
 });
