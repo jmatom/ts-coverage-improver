@@ -1,0 +1,28 @@
+node_modules/
+dist/
+build/
+coverage/
+
+# Local env (no secrets in git)
+.env
+.env.local
+
+# Local dev artifacts
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+/tmp/
+
+# OS
+.DS_Store
+*.log
+
+# Agent / local-machine context: contains absolute paths + workflow notes
+# specific to one developer's environment, not useful to readers.
+CLAUDE.md
+
+# Editor / TS / Vite build artifacts that should never be committed
+*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts

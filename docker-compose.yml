@@ -1,0 +1,62 @@
+services:
+  # Builds the per-job sandbox image into the local Docker daemon. The
+  # backend later asks the daemon to spawn containers from this image —
+  # this service never runs (`exit 0` and exits). Listed first so
+  # `docker compose up --build` builds it before backend starts.
+  sandbox:
+    image: coverage-improver-sandbox:latest
+    build:
+      context: ./sandbox
+      dockerfile: Dockerfile
+    # `command: true` is a one-shot no-op: the container exits 0 immediately.
+    # `restart: "no"` prevents compose from looping it. The backend's job
+    # containers are spawned outside compose by dockerode at job time.
+    command: ["true"]
+    restart: "no"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: coverage-improver-backend:latest
+    depends_on:
+      sandbox:
+        condition: service_completed_successfully
+    environment:
+      PORT: 3000
+      DATABASE_PATH: /var/lib/coverage-improver/coverage.db
+      JOB_WORKDIR_ROOT: ${HOST_JOB_WORKDIR_ROOT:-/tmp/coverage-improver-jobs}
+      DEFAULT_COVERAGE_THRESHOLD: ${DEFAULT_COVERAGE_THRESHOLD:-80}
+      MAX_CONCURRENT_SANDBOXES: ${MAX_CONCURRENT_SANDBOXES:-4}
+      MAX_CONCURRENT_AI_CALLS: ${MAX_CONCURRENT_AI_CALLS:-2}
+      MAX_QUEUE_DEPTH: ${MAX_QUEUE_DEPTH:-50}
+      EVENT_LOOP_STALL_THRESHOLD_MS: ${EVENT_LOOP_STALL_THRESHOLD_MS:-50}
+      AI_CLI: ${AI_CLI:-claude}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      SANDBOX_IMAGE: coverage-improver-sandbox:latest
+      DOCKER_SOCKET_PATH: /var/run/docker.sock
+    volumes:
+      # SQLite database on a named volume so it survives compose down.
+      - coverage-improver-data:/var/lib/coverage-improver
+      # Bind path equality matters: the backend tells the host docker daemon
+      # to mount JOB_WORKDIR_ROOT into a sandbox container, so that path must
+      # resolve to the same files in both the backend container's filesystem
+      # AND the host daemon's view. Same host path bound into both.
+      - ${HOST_JOB_WORKDIR_ROOT:-/tmp/coverage-improver-jobs}:${HOST_JOB_WORKDIR_ROOT:-/tmp/coverage-improver-jobs}
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "3000:3000"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: coverage-improver-frontend:latest
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+
+volumes:
+  coverage-improver-data:

@@ -1,0 +1,48 @@
+%% Render with mermaid-cli or any GitHub-flavored markdown viewer.
+%% Source for the diagram referenced from README.md.
+
+flowchart TB
+    subgraph Frontend [React Dashboard]
+        UI[Vite + Tailwind + shadcn-style UI]
+    end
+
+    subgraph Backend [NestJS Backend]
+        direction TB
+        Ctrl[HTTP Controllers]
+        UC[Use Cases<br/>application/usecases/*]
+        Domain[Domain Aggregates + VOs<br/>domain/*]
+        Queue[InMemoryPerRepoQueue<br/>per-repo serialization]
+        SQLite[(SQLite<br/>node:sqlite)]
+        Ctrl --> UC
+        UC --> Domain
+        UC --> Queue
+        Queue --> UC
+        UC --> SQLite
+    end
+
+    subgraph SandboxLayer [Per-Job Sandbox Container]
+        direction TB
+        Claude[Claude Code CLI<br/>-p headless]
+        TestRunner[npm install + jest/vitest/mocha<br/>--coverage]
+        Workspace[/workspace<br/>cloned repo]
+        Claude -.writes.-> Workspace
+        TestRunner -.reads.-> Workspace
+    end
+
+    subgraph External [External Systems]
+        GH[GitHub<br/>Octokit + git over HTTPS]
+        Anthropic[Anthropic API]
+    end
+
+    UI -- HTTP /api/* --> Ctrl
+    Backend -- dockerode + /var/run/docker.sock --> SandboxLayer
+    Backend -- clone, fork, push, PR --> GH
+    SandboxLayer -- API calls --> Anthropic
+    SandboxLayer -- npm registry, GitHub --> GH
+
+    classDef domain fill:#fef3c7,stroke:#d97706,color:#78350f
+    classDef infra fill:#e0e7ff,stroke:#4f46e5,color:#312e81
+    classDef ext fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+    class Domain,UC domain
+    class Ctrl,Queue,SQLite infra
+    class GH,Anthropic ext
