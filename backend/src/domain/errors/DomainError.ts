@@ -143,22 +143,6 @@ export class QueueDepthExceededError extends DomainError {
   }
 }
 
-/**
- * Idempotency guard on POST /repositories/:id/refresh: a previous analysis
- * is already pending or running for this repo. Surfaces as HTTP 409 so
- * direct API callers can distinguish "already doing it" from a transient
- * failure. The dashboard's button is disabled while analyzing, so this
- * mostly catches scripted callers and tab-races.
- */
-export class AnalysisAlreadyInFlightError extends DomainError {
-  readonly code = 'ANALYSIS_ALREADY_IN_FLIGHT';
-  constructor(public readonly repositoryId: string, public readonly currentStatus: string) {
-    super(
-      `An analysis for this repository is already ${currentStatus}. Wait for it to finish before requesting another.`,
-    );
-  }
-}
-
 // --- Aggregate lookups (HTTP 404) -------------------------------------------
 
 export class RepositoryNotFoundError extends DomainError {

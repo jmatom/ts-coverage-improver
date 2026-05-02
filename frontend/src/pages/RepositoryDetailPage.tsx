@@ -51,6 +51,12 @@ export function RepositoryDetailPage() {
   const [threshold, setThreshold] = useState(80);
   const [thresholdReady, setThresholdReady] = useState(false);
   const [requesting, setRequesting] = useState<string | null>(null);
+  // Optimistic in-flight flag for the analyze button. Closes the gap between
+  // click and the HTTP 202 response landing — without this, rapid double/
+  // triple-clicks have no visual feedback for the network round-trip and
+  // each fires a duplicate request (backend deduplicates with 409, but the
+  // button stays in the idle state until `repo.analysisStatus` updates).
+  const [analyzeSubmitting, setAnalyzeSubmitting] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [toast, setToast] = useState<ToastInput | null>(null);
   const [jobToDelete, setJobToDelete] = useState<Job | null>(null);
@@ -113,23 +119,21 @@ export function RepositoryDetailPage() {
 
   const onAnalyze = async () => {
     if (!id) return;
+    if (analyzeSubmitting) return; // already mid-flight on the client
     setError(null);
+    setAnalyzeSubmitting(true);
     try {
-      // Returns 202 immediately with analysisStatus='pending'. Update the
-      // local repo so the button flips to "Analyzing…" without waiting
-      // for the next 3s poll tick.
+      // Returns 202 immediately with analysisStatus='pending' (or the
+      // current 'pending'/'running' state if a previous analysis is already
+      // in flight — the backend treats duplicate requests as no-op-success
+      // and returns the same shape). Either way, update the local repo so
+      // the button flips without waiting for the next 3s poll tick.
       const updated = await api.refreshRepository(id);
       setRepo(updated);
     } catch (e) {
-      // Idempotency: if an analysis is already pending or running for this
-      // repo, surface as a transient toast — it's expected, not a bug.
-      // Refresh state via load() so the dashboard catches up.
-      if (e instanceof ApiError && e.code === 'ANALYSIS_ALREADY_IN_FLIGHT') {
-        setToast({ tone: 'info', message: e.message });
-        await load();
-      } else {
-        setError(e);
-      }
+      setError(e);
+    } finally {
+      setAnalyzeSubmitting(false);
     }
   };
 
@@ -249,15 +253,23 @@ export function RepositoryDetailPage() {
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
-              <Button onClick={onAnalyze} disabled={analyzing} variant="outline">
-                <RefreshCw className={`mr-2 h-4 w-4 ${analyzing ? 'animate-spin' : ''}`} />
-                {analyzing
-                  ? repo.analysisStatus === 'pending'
-                    ? 'Queued…'
-                    : 'Analyzing…'
-                  : repo.lastAnalyzedAt
-                    ? 'Re-analyze'
-                    : 'Analyze'}
+              <Button
+                onClick={onAnalyze}
+                disabled={analyzing || analyzeSubmitting}
+                variant="outline"
+              >
+                <RefreshCw
+                  className={`mr-2 h-4 w-4 ${analyzing || analyzeSubmitting ? 'animate-spin' : ''}`}
+                />
+                {analyzeSubmitting && !analyzing
+                  ? 'Submitting…'
+                  : analyzing
+                    ? repo.analysisStatus === 'pending'
+                      ? 'Queued…'
+                      : 'Analyzing…'
+                    : repo.lastAnalyzedAt
+                      ? 'Re-analyze'
+                      : 'Analyze'}
               </Button>
               <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
                 <Tooltip content="Remove this repository from the dashboard. The bot's GitHub fork is left intact (it may have open PRs).">

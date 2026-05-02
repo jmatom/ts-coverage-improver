@@ -46,7 +46,6 @@ const HTTP_STATUS_BY_CODE: Record<string, number> = {
 
   // 409 — idempotency conflict: the requested operation is already happening
   JOB_ALREADY_IN_FLIGHT: 409,
-  ANALYSIS_ALREADY_IN_FLIGHT: 409,
   CANNOT_DELETE_IN_FLIGHT_JOB: 409,
 
   // 502 — third-party API problem (GitHub unreachable, etc.)

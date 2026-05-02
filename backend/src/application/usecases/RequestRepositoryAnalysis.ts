@@ -1,10 +1,8 @@
 import { Logger } from '@nestjs/common';
+import { Repository } from '@domain/repository/Repository';
 import { RepositoryRepository } from '@domain/ports/RepositoryRepository';
 import { RepositoryAnalysisScheduler } from '@domain/services/RepositoryAnalysisScheduler';
-import {
-  AnalysisAlreadyInFlightError,
-  RepositoryNotFoundError,
-} from '@domain/errors/DomainError';
+import { RepositoryNotFoundError } from '@domain/errors/DomainError';
 import { AnalyzeRepositoryCoverage } from './AnalyzeRepositoryCoverage';
 import { RepositorySummaryDto } from '../dto/Dto';
 
@@ -42,13 +40,18 @@ export class RequestRepositoryAnalysis {
     if (!repo) throw new RepositoryNotFoundError(input.repositoryId);
 
     // Idempotency: if an analysis is already pending or running for this
-    // repo, refuse the duplicate with HTTP 409 instead of silently
-    // enqueueing a second worker run. The dashboard's button is already
-    // disabled when `analysisStatus` is in flight; this guard catches
-    // direct API callers, tab races, and the small window between a click
-    // and the 202 response arriving back at the browser.
+    // repo, return the current state with HTTP 202 instead of throwing.
+    // The user's intent ("ensure a fresh analysis runs") is already
+    // satisfied by the in-flight one, so a duplicate request is a
+    // no-op-success, not an error. The dashboard treats fresh and
+    // duplicate responses identically (both 202 + repo summary), which
+    // closes the rapid-double-click footgun cleanly. We DON'T re-enqueue
+    // — the previous request already did that.
     if (repo.isAnalyzing) {
-      throw new AnalysisAlreadyInFlightError(repo.id, repo.analysisStatus);
+      this.logger.log(
+        `Analysis already in flight for ${repo.fullName} (status=${repo.analysisStatus}) — returning current state`,
+      );
+      return this.toDto(repo);
     }
 
     repo.markAnalysisRequested();
@@ -73,6 +76,10 @@ export class RequestRepositoryAnalysis {
       }
     });
 
+    return this.toDto(repo);
+  }
+
+  private toDto(repo: Repository): RepositorySummaryDto {
     return {
       id: repo.id,
       owner: repo.owner,

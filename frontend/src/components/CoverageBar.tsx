@@ -16,11 +16,26 @@ export function CoverageBar({
       : value >= 50
         ? 'bg-amber-500'
         : 'bg-rose-500';
+  // Tint the track with a faint version of the tone so a 0% bar still reads
+  // as "below threshold, empty" rather than a muted skeleton placeholder.
+  const track =
+    value >= threshold
+      ? 'bg-emerald-100'
+      : value >= 50
+        ? 'bg-amber-100'
+        : 'bg-rose-100';
+  const textTone =
+    value >= threshold
+      ? 'text-emerald-700'
+      : value >= 50
+        ? 'text-amber-700'
+        : 'text-rose-700';
   return (
     <div className="flex items-center gap-2">
       <div
         className={cn(
-          'overflow-hidden rounded-full bg-muted',
+          'overflow-hidden rounded-full',
+          track,
           size === 'sm' ? 'h-1.5 w-24' : 'h-2 w-32',
         )}
       >
@@ -31,7 +46,8 @@ export function CoverageBar({
       </div>
       <span
         className={cn(
-          'tabular-nums text-muted-foreground',
+          'tabular-nums',
+          textTone,
           size === 'sm' ? 'w-10 text-[11px]' : 'w-12 text-xs',
         )}
       >

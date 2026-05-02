@@ -2,7 +2,6 @@ import { Repository } from '../../../src/domain/repository/Repository';
 import { RepositoryRepository } from '../../../src/domain/ports/RepositoryRepository';
 import { RepositoryAnalysisScheduler } from '../../../src/domain/services/RepositoryAnalysisScheduler';
 import {
-  AnalysisAlreadyInFlightError,
   RepositoryNotFoundError,
 } from '../../../src/domain/errors/DomainError';
 import { RequestRepositoryAnalysis } from '../../../src/application/usecases/RequestRepositoryAnalysis';
@@ -112,7 +111,7 @@ describe('RequestRepositoryAnalysis', () => {
   });
 
   describe('idempotency guard', () => {
-    it('rejects a duplicate request when status is pending', async () => {
+    it('returns current state without re-enqueueing when status is pending', async () => {
       const repo = Repository.create({ owner: 'o', name: 'n', defaultBranch: 'main' });
       repo.markAnalysisRequested();
       const repos = new FakeRepos(repo);
@@ -120,15 +119,15 @@ describe('RequestRepositoryAnalysis', () => {
       const analyze = new FakeAnalyze() as unknown as AnalyzeRepositoryCoverage;
       const useCase = new RequestRepositoryAnalysis(repos, scheduler, analyze);
 
-      await expect(useCase.execute({ repositoryId: repo.id })).rejects.toBeInstanceOf(
-        AnalysisAlreadyInFlightError,
-      );
-      // Nothing was persisted or enqueued by the rejected request.
+      const dto = await useCase.execute({ repositoryId: repo.id });
+      expect(dto.analysisStatus).toBe('pending');
+      // Nothing was persisted or enqueued by the duplicate request — the
+      // earlier in-flight request already did both.
       expect(repos.saved).toHaveLength(0);
       expect(scheduler.scheduled).toHaveLength(0);
     });
 
-    it('rejects a duplicate request when status is running', async () => {
+    it('returns current state without re-enqueueing when status is running', async () => {
       const repo = Repository.create({ owner: 'o', name: 'n', defaultBranch: 'main' });
       repo.markAnalysisRequested();
       repo.markAnalysisRunning();
@@ -137,9 +136,8 @@ describe('RequestRepositoryAnalysis', () => {
       const analyze = new FakeAnalyze() as unknown as AnalyzeRepositoryCoverage;
       const useCase = new RequestRepositoryAnalysis(repos, scheduler, analyze);
 
-      await expect(useCase.execute({ repositoryId: repo.id })).rejects.toBeInstanceOf(
-        AnalysisAlreadyInFlightError,
-      );
+      const dto = await useCase.execute({ repositoryId: repo.id });
+      expect(dto.analysisStatus).toBe('running');
       expect(repos.saved).toHaveLength(0);
       expect(scheduler.scheduled).toHaveLength(0);
     });
