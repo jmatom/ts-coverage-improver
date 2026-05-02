@@ -78,9 +78,17 @@ export class SqliteConnection {
 
   /**
    * Same boot-time hygiene for `repositories.analysis_status`. A process
-   * restart mid-analysis would leave repos stuck in `pending`/`running`;
-   * mark them `failed` with a clear reason so the dashboard surfaces the
-   * truth instead of pretending the analysis is still progressing.
+   * restart mid-analysis (worker actively cloning/installing/testing) would
+   * leave a repo stuck in `running`; mark it `failed` so the dashboard
+   * surfaces the truth instead of pretending the analysis is still
+   * progressing.
+   *
+   * Crucially, this only targets `running` rows — NOT `pending` ones. A
+   * `pending` row was enqueued but never picked up by a worker; the right
+   * action is to re-enqueue it, which the `RecoverPendingWork` use case
+   * does after this reconciler finishes. Mirror of
+   * `reconcileOrphanRunningJobs` for improvement jobs.
+   *
    * Returns the number of rows reconciled.
    */
   reconcileOrphanRunningAnalyses(
@@ -91,7 +99,7 @@ export class SqliteConnection {
         `UPDATE repositories
             SET analysis_status = 'failed',
                 analysis_error = ?
-          WHERE analysis_status IN ('pending', 'running')`,
+          WHERE analysis_status = 'running'`,
       )
       .run(reason);
     return Number(result.changes);

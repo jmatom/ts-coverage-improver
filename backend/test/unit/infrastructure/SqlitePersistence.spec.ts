@@ -82,7 +82,7 @@ describe('SQLite persistence', () => {
       expect(fetched?.analysisError).toBe('npm install timed out');
     });
 
-    it('SqliteConnection.reconcileOrphanRunningAnalyses resets pending+running rows to failed at boot', async () => {
+    it('SqliteConnection.reconcileOrphanRunningAnalyses resets only running rows to failed; leaves pending alone for recovery', async () => {
       const repo = new SqliteRepositoryRepository(conn.db);
       const a = Repository.create({ owner: 'a', name: 'a', defaultBranch: 'main' });
       a.markAnalysisRequested();
@@ -90,7 +90,8 @@ describe('SQLite persistence', () => {
       await repo.save(a);
 
       const b = Repository.create({ owner: 'b', name: 'b', defaultBranch: 'main' });
-      b.markAnalysisRequested(); // pending only — also stuck
+      b.markAnalysisRequested(); // pending — must NOT be reconciled, the
+      // RecoverPendingWork use case re-enqueues it instead
       await repo.save(b);
 
       const c = Repository.create({ owner: 'c', name: 'c', defaultBranch: 'main' });
@@ -98,11 +99,13 @@ describe('SQLite persistence', () => {
       await repo.save(c);
 
       const reconciled = conn.reconcileOrphanRunningAnalyses();
-      expect(reconciled).toBe(2);
+      expect(reconciled).toBe(1);
 
       expect((await repo.findById(a.id))?.analysisStatus).toBe('failed');
       expect((await repo.findById(a.id))?.analysisError).toContain('process restarted');
-      expect((await repo.findById(b.id))?.analysisStatus).toBe('failed');
+      // Pending stays pending so the recovery path can re-enqueue it.
+      expect((await repo.findById(b.id))?.analysisStatus).toBe('pending');
+      expect((await repo.findById(b.id))?.analysisError).toBeNull();
       expect((await repo.findById(c.id))?.analysisStatus).toBe('idle');
     });
 

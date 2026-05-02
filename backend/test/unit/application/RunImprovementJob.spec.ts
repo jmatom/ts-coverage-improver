@@ -71,6 +71,9 @@ class FakeRepos {
   async list(): Promise<Repository[]> {
     return [this.repo];
   }
+  async findByAnalysisStatus(): Promise<Repository[]> {
+    return [];
+  }
   async delete(): Promise<void> {
     /* unused in orchestration tests */
   }

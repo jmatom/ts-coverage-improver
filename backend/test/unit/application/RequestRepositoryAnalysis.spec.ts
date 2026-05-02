@@ -23,6 +23,9 @@ class FakeRepos implements RepositoryRepository {
   async list(): Promise<Repository[]> {
     return this.initial ? [this.initial] : [];
   }
+  async findByAnalysisStatus(): Promise<Repository[]> {
+    return this.initial ? [this.initial] : [];
+  }
   async delete(): Promise<void> {}
 }
 

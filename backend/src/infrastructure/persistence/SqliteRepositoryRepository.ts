@@ -74,6 +74,13 @@ export class SqliteRepositoryRepository implements RepositoryRepository {
     return rows.map((r) => this.fromRow(r));
   }
 
+  async findByAnalysisStatus(status: AnalysisStatus): Promise<Repository[]> {
+    const rows = this.db
+      .prepare('SELECT * FROM repositories WHERE analysis_status = ? ORDER BY owner, name')
+      .all(status) as unknown as Row[];
+    return rows.map((r) => this.fromRow(r));
+  }
+
   async delete(id: string): Promise<void> {
     // Foreign-key cascades drop coverage_reports → file_coverages and
     // improvement_jobs → job_logs. PRAGMA foreign_keys=ON is set in

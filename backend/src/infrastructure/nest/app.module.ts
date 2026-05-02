@@ -27,6 +27,7 @@ import { GetJobStatus } from '@application/usecases/GetJobStatus';
 import { ListJobs } from '@application/usecases/ListJobs';
 import { AnalyzeRepositoryCoverage } from '@application/usecases/AnalyzeRepositoryCoverage';
 import { RequestRepositoryAnalysis } from '@application/usecases/RequestRepositoryAnalysis';
+import { RecoverPendingWork } from '@application/usecases/RecoverPendingWork';
 import { RunImprovementJob } from '@application/usecases/RunImprovementJob';
 import { DeleteRepository } from '@application/usecases/DeleteRepository';
 import { DeleteJob } from '@application/usecases/DeleteJob';
@@ -268,6 +269,21 @@ const SQLITE_CONNECTION = 'SqliteConnection';
       ],
     },
     {
+      provide: RecoverPendingWork,
+      useFactory: (
+        jobs: SqliteJobRepository,
+        repos: SqliteRepositoryRepository,
+        scheduler: InMemoryPerRepoQueue,
+        analyze: AnalyzeRepositoryCoverage,
+      ) => new RecoverPendingWork(jobs, repos, scheduler, scheduler, analyze),
+      inject: [
+        TOKENS.JobRepository,
+        TOKENS.RepositoryRepository,
+        TOKENS.JobScheduler,
+        AnalyzeRepositoryCoverage,
+      ],
+    },
+    {
       provide: GetJobStatus,
       useFactory: (jobs: SqliteJobRepository) => new GetJobStatus(jobs),
       inject: [TOKENS.JobRepository],
@@ -295,6 +311,7 @@ export class AppModule implements OnModuleInit {
   constructor(
     @Inject(TOKENS.GitHubPort) private readonly github: GitHubPort,
     @Inject(TOKENS.SandboxPort) private readonly sandbox: SandboxPort,
+    private readonly recover: RecoverPendingWork,
   ) {}
 
   /**
@@ -303,6 +320,11 @@ export class AppModule implements OnModuleInit {
    *  - PAT validity: a single Octokit `users.getAuthenticated` call.
    *  - Sandbox readiness: docker daemon reachable + image present.
    * Either failure throws → Nest aborts boot with a clear message.
+   *
+   * After validation passes, recover any `pending` work persisted from a
+   * previous process. The SqliteConnection factory already handled
+   * `running`-row reconciliation (marked them `failed`); this step
+   * re-enqueues `pending` rows that never got picked up before the restart.
    */
   async onModuleInit(): Promise<void> {
     const login = await this.github.whoami().catch((e: Error) => {
@@ -314,5 +336,7 @@ export class AppModule implements OnModuleInit {
 
     await this.sandbox.assertReady();
     this.logger.log('Sandbox ready — image present, daemon reachable');
+
+    await this.recover.execute();
   }
 }
