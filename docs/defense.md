@@ -111,6 +111,15 @@ Both happen in a **disposable Docker container per job**:
 
 **Roadmap (documented limitation):** custom bridge with iptables egress allow-list (only GitHub + Anthropic API + npm registry reachable). The current setup is sufficient for a 3-day demo; the egress policy is Linux-distribution-specific and outside the scope.
 
+### Process-level vs filesystem-level isolation (honest distinction)
+
+The OS-level guarantees above are real. But the AI container shares its `/workspace` bind-mount with the install/test containers, so a `postinstall` script can plant content (e.g., `CLAUDE.md`) that the AI later reads as project context. Two mitigations are wired into `RunImprovementJob`:
+
+1. **Pre-AI agent-config scrubbing** (`scrubAgentConfig`): drops `CLAUDE.md`, `.claude/`, `.cursor/`, `.aider.*`, `AGENTS.md` from the workdir before each AI invocation.
+2. **Post-AI secret scanning** (`secretGuard`): scans the AI's logs and every written file for known secret shapes (`sk-ant-…`, `ghp_…`, `github_pat_…`, `gho_/u/s/r_…`, `AKIA…`). On match, the attempt fails with `kind: 'security'` and the orchestrator halts immediately — no retry, no sibling fallback, **no push**.
+
+Both are documented in `docs/security.md` with the threat model and an empirical-verification recipe.
+
 ---
 
 ## Why the AI is pluggable
@@ -253,15 +262,33 @@ The test run fails. That's a behavioral failure → no sibling fallback → job 
 
 ---
 
+## Reliability & operational hardening (post-MVP, all shipped)
+
+These are decisions made after the spec was satisfied, in service of "would this survive a real production touch?" Documented in `docs/concurrency-and-backpressure.md` and `docs/runtime-topology.md`.
+
+| Concern | What's wired in |
+|---|---|
+| **Long-running analyze blocking HTTP** | `POST /repositories/:id/refresh` returns **HTTP 202** in <100ms; the actual clone+install+tests runs on the per-repo queue worker. Dashboard polls `analysisStatus` (`pending → running → idle/failed`). Same pattern as improvement jobs |
+| **`pending` work lost on process restart** | `RecoverPendingWork` runs at `onModuleInit` after GitHub + sandbox readiness checks. Re-enqueues every `pending` row from the previous process. `running` rows are reconciled to `failed` separately (worker died mid-flight, can't safely resume). Mirror logic for both improvement jobs and analyses |
+| **Duplicate clicks** | Both `POST /jobs` and `POST /refresh` are idempotent: existing in-flight work returns **HTTP 409** (`JOB_ALREADY_IN_FLIGHT` or `ANALYSIS_ALREADY_IN_FLIGHT`) instead of silently double-enqueueing. The dashboard surfaces both as a friendly toast, not an error banner |
+| **Burst load saturating Anthropic / dockerd** | Two typed semaphores (`MAX_CONCURRENT_SANDBOXES=4`, `MAX_CONCURRENT_AI_CALLS=2`) enforce host-bound vs account-bound concurrency caps independently. `MAX_QUEUE_DEPTH=50` admission-control on the API side returns **HTTP 503** if the active-job count crosses it — bounded memory, predictable failure mode |
+| **Event-loop blocking from in-process CPU work** | `monitorEventLoopDelay` polled at 1Hz, warns when worst-case stall ≥ 50ms. Threshold env-configurable. Hot-path `readFileSync`/`existsSync` already converted to `fs/promises` versions |
+| **Monorepo support** | Optional `subpath` at registration. `Repository` aggregate validates (rejects `..` traversal). `AnalyzeRepositoryCoverage` and `RunImprovementJob` split workdir into `cloneRoot` (git ops) vs `packageRoot` (install/tests/AI). Empty subpath = repo root, single-package behavior unchanged |
+
+Each one is small (≤ ~150 LOC), surfaces through a stable env var, and has at least one unit test pinning the behavior. **148/148 tests** across 19 suites.
+
+---
+
 ## What I'd do next (genuine roadmap, not hand-waving)
 
 These are honest follow-ups, ordered by value:
 
-1. **Egress allow-list on the sandbox network** — custom bridge + iptables rules. Only GitHub + Anthropic API + npm registry reachable. Closes the network-policy gap noted in the README's "Documented limitations."
+1. **Egress allow-list on the sandbox network** — custom bridge + iptables rules. Only GitHub + Anthropic API + npm registry reachable. Closes the network-policy gap noted in `docs/security.md`.
 2. **Branch-coverage targeting** — the lcov format includes BRDA records for individual branch outcomes. We could pass uncovered *branches* (not just lines) to the AI for partially-covered files. Higher-quality test generation; uses data we already have.
-3. **CI dispatch on PR open** — currently we don't trigger upstream CI; the PR's CI run depends on whether the upstream has CI configured for fork PRs. We could add a `gh workflow run` on the upstream after PR open.
-4. **Mutation testing as an optional extra gate** — Stryker on the target file would prove the new tests catch real bugs, not just exercise lines. Slow (minutes), so make it opt-in per repo.
-5. **Multi-process job execution** — swap `InMemoryPerRepoQueue` for a Redis-backed queue behind the same `JobScheduler` interface. Useful when you have 50 engineers all clicking Improve at once.
+3. **Folder-tree picker on the registration form** — for monorepos, autocomplete the subpath input by querying GitHub's `git/trees?recursive=1` and filtering to directories that contain a `package.json`. ~150 LOC; covered as a future-state in the chat history.
+4. **CI dispatch on PR open** — currently we don't trigger upstream CI; the PR's CI run depends on the upstream's fork-PR policy. A `gh workflow run` after PR open would close the loop.
+5. **Mutation testing as an optional extra gate** — Stryker on the target file would prove the new tests catch real bugs, not just exercise lines. Slow (minutes), so opt-in per repo.
+6. **Multi-process job execution / outbox-style worker** — swap `InMemoryPerRepoQueue` for a SQLite-polling worker (cheapest path) or a real broker (Redis Streams + BullMQ Pro). Useful when one backend can't keep up. The `JobScheduler` and `RepositoryAnalysisScheduler` ports are already shaped for this swap; **zero domain or application code changes needed**.
 
 ---
 
