@@ -413,7 +413,13 @@ export function RepositoryDetailPage() {
               <TableHeader className="sticky top-0 z-10 bg-background shadow-[0_1px_0_0_hsl(var(--border))]">
                 <TableRow>
                   <TableHead>File</TableHead>
-                  <TableHead>Lines</TableHead>
+                  <TableHead>
+                    <Tooltip content={<>Percentage of the file's executable lines hit by the project's test suite during the last analysis. <strong>0%</strong> means the file was instrumented but no test exercised it — usually because no test imports the file (the typical target for an Improve run).</>}>
+                      <span className="cursor-help underline decoration-dotted underline-offset-4">
+                        Lines
+                      </span>
+                    </Tooltip>
+                  </TableHead>
                   <TableHead>
                     <Tooltip content="Branch coverage (`if`/`else`/ternary outcomes). `—` means the project's coverage tool did not report branches.">
                       <span className="cursor-help underline decoration-dotted underline-offset-4">
