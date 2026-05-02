@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ExternalLink, Eye, Info, MoreHorizontal, RefreshCw, Sparkles, Trash2 } from 'lucide-react';
+import { ExternalLink, Eye, Info, MoreHorizontal, RefreshCw, Repeat, Sparkles, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -594,6 +594,14 @@ export function RepositoryDetailPage() {
                               <ExternalLink className="h-4 w-4" />
                               Visit PR
                             </DropdownMenuItem>
+                            {j.status === 'failed' && (
+                              <DropdownMenuItem
+                                onSelect={() => void onImprove(j.targetFilePath)}
+                              >
+                                <Repeat className="h-4 w-4" />
+                                Retry improvement
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
                               destructive
