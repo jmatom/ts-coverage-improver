@@ -391,8 +391,14 @@ export function RepositoryDetailPage() {
                 : 'No coverage data yet — click Analyze.'}
             </p>
           ) : (
+            // Cap the low-coverage table at ~10 rows; large repos (hundreds
+            // of files below threshold) used to push the Improvement jobs
+            // section far below the fold. The table now scrolls internally;
+            // the header stays put via sticky positioning so the column
+            // labels remain visible.
+            <div className="max-h-[480px] overflow-y-auto rounded-md border">
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 z-10 bg-background shadow-[0_1px_0_0_hsl(var(--border))]">
                 <TableRow>
                   <TableHead>File</TableHead>
                   <TableHead>Lines</TableHead>
@@ -480,6 +486,7 @@ export function RepositoryDetailPage() {
                 })}
               </TableBody>
             </Table>
+            </div>
           )}
           {!!error && <ErrorBanner error={error} className="mt-3" />}
         </CardContent>
