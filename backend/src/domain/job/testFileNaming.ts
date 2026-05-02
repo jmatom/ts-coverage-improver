@@ -29,25 +29,39 @@ function splitPath(sourcePath: string): { dir: string; stem: string; ext: string
   return { dir, stem, ext };
 }
 
-/** `src/foo.ts` → `src/foo.test.ts` (idiomatic; first-time test for this source). */
-export function idiomaticSiblingTestPath(sourcePath: string): string {
+/** Which infix the project uses on test filenames: `<base>.test.ts` vs `<base>.spec.ts`. */
+export type TestConvention = 'test' | 'spec';
+
+/** `src/foo.ts` → `src/foo.test.ts` (or `.spec.ts` per project convention). */
+export function idiomaticSiblingTestPath(
+  sourcePath: string,
+  convention: TestConvention = 'test',
+): string {
   const { dir, stem, ext } = splitPath(sourcePath);
-  return `${dir}${stem}.test${ext}`;
+  return `${dir}${stem}.${convention}${ext}`;
 }
 
 /** `src/foo.ts` → `src/foo.generated.test.ts` (fallback when an existing test file is present). */
-export function fallbackSiblingTestPath(sourcePath: string): string {
+export function fallbackSiblingTestPath(
+  sourcePath: string,
+  convention: TestConvention = 'test',
+): string {
   const { dir, stem, ext } = splitPath(sourcePath);
-  return `${dir}${stem}.generated.test${ext}`;
+  return `${dir}${stem}.generated.${convention}${ext}`;
 }
 
 /**
  * Pick the right sibling path based on whether an existing test file was
- * found at orchestrator entry. Caller passes `hasExistingTest`, the rule
- * lives here so the orchestrator and the prompt builder agree on the name.
+ * found at orchestrator entry, and which infix convention the project uses.
+ * Caller passes `hasExistingTest` and `convention`; the rule lives here so
+ * the orchestrator and the prompt builder agree on the name.
  */
-export function siblingTestPath(sourcePath: string, hasExistingTest = false): string {
+export function siblingTestPath(
+  sourcePath: string,
+  hasExistingTest = false,
+  convention: TestConvention = 'test',
+): string {
   return hasExistingTest
-    ? fallbackSiblingTestPath(sourcePath)
-    : idiomaticSiblingTestPath(sourcePath);
+    ? fallbackSiblingTestPath(sourcePath, convention)
+    : idiomaticSiblingTestPath(sourcePath, convention);
 }
