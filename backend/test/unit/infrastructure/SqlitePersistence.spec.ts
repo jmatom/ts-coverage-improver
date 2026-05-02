@@ -56,6 +56,29 @@ describe('SQLite persistence', () => {
       expect(all).toHaveLength(1);
     });
 
+    it('round-trips subpath (monorepo support)', async () => {
+      const repo = new SqliteRepositoryRepository(conn.db);
+      const r = Repository.create({
+        owner: 'o',
+        name: 'n',
+        defaultBranch: 'main',
+        subpath: 'apps/web',
+      });
+      await repo.save(r);
+
+      const fetched = await repo.findById(r.id);
+      expect(fetched?.subpath).toBe('apps/web');
+    });
+
+    it('subpath defaults to empty for repos created without one', async () => {
+      const repo = new SqliteRepositoryRepository(conn.db);
+      const r = Repository.create({ owner: 'o', name: 'n', defaultBranch: 'main' });
+      await repo.save(r);
+
+      const fetched = await repo.findById(r.id);
+      expect(fetched?.subpath).toBe('');
+    });
+
     it('round-trips analysis-lifecycle fields (running with startedAt)', async () => {
       const repo = new SqliteRepositoryRepository(conn.db);
       const r = Repository.create({ owner: 'o', name: 'n', defaultBranch: 'main' });

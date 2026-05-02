@@ -38,7 +38,7 @@ export class RepositoriesController {
 
   @Post()
   async create(@Body() body: RegisterRepositoryRequestDto) {
-    return this.register.execute({ url: body.url });
+    return this.register.execute({ url: body.url, subpath: body.subpath });
   }
 
   @Get()

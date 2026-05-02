@@ -68,31 +68,38 @@ export class AnalyzeRepositoryCoverage {
   private async runUnsafe(
     repo: Repository,
   ): Promise<{ commitSha: string; fileCount: number }> {
-    const workdir = join(this.deps.jobWorkdirRoot, `analyze-${repo.id}`);
+    // Clone root: where the entire repo lives on disk.
+    const cloneRoot = join(this.deps.jobWorkdirRoot, `analyze-${repo.id}`);
     const { commitSha } = await this.deps.git.clone({
       cloneUrl: repo.cloneUrl,
       branch: repo.defaultBranch,
-      workdir,
+      workdir: cloneRoot,
       token: this.deps.githubToken,
     });
+
+    // Package root: where the package's `package.json` actually lives.
+    // Empty subpath = repo root (the common case). All package-level
+    // operations (install, tests, file probes) operate against this dir;
+    // git operations stay at cloneRoot.
+    const packageRoot = repo.subpath ? join(cloneRoot, repo.subpath) : cloneRoot;
 
     // CoverageRunnerPort is the single source of coverage data — its
     // implementation may opt to reuse a committed coverage/lcov.info or
     // run install+tests in the sandbox. The application doesn't care.
-    const result = await this.deps.coverageRunner.run({ workdir });
+    const result = await this.deps.coverageRunner.run({ workdir: packageRoot });
 
     // Enrich each FileCoverage with `hasExistingTest`. The lcov payload alone
-    // can't tell us this; we probe the freshly-cloned workdir for sibling test
-    // files using the same heuristics RunImprovementJob uses at job time. This
-    // makes the dashboard able to differentiate "needs append" from "needs
-    // sibling" without re-cloning.
+    // can't tell us this; we probe the freshly-cloned package root for sibling
+    // test files using the same heuristics RunImprovementJob uses at job time.
+    // FileCoverage paths are relative to the package root (that's how Istanbul
+    // emits them when run from there), so the probe path resolves naturally.
     //
     // Probes run in parallel via Promise.all — each await goes through libuv's
     // threadpool, so N files complete in roughly the time of the slowest probe
     // rather than serial-O(N). Keeps the event loop free during analyze.
     const enrichedFiles = await Promise.all(
       result.files.map(async (f) =>
-        f.withHasExistingTest((await findExistingTestPath(workdir, f.path)) !== null),
+        f.withHasExistingTest((await findExistingTestPath(packageRoot, f.path)) !== null),
       ),
     );
 

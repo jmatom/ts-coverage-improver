@@ -13,6 +13,12 @@ export interface RepositorySummary {
   overallLinesPct: number | null;
   fileCount: number;
   /**
+   * Subpath inside the cloned repo where this package's `package.json`
+   * lives. Empty string = repo root (the common case). For monorepos
+   * the user provides this at registration; e.g. 'backend', 'apps/web'.
+   */
+  subpath: string;
+  /**
    * Per-repository analyze-coverage lifecycle. The backend returns 202 from
    * POST /repositories/:id/refresh and the actual work runs on the per-repo
    * queue worker (which can take minutes). The dashboard polls this
@@ -102,10 +108,13 @@ export interface ServerConfig {
 
 export const api = {
   getConfig: () => request<ServerConfig>('/config'),
-  registerRepository: (url: string) =>
+  // `subpath` is optional; empty/undefined = repo root (common case). For
+  // monorepos pass the relative path to the package's package.json, e.g.
+  // 'backend' or 'apps/web'.
+  registerRepository: (url: string, subpath?: string) =>
     request<RepositorySummary>('/repositories', {
       method: 'POST',
-      body: JSON.stringify({ url }),
+      body: JSON.stringify(subpath ? { url, subpath } : { url }),
     }),
   listRepositories: () => request<RepositorySummary[]>('/repositories'),
   deleteRepository: async (id: string): Promise<void> => {

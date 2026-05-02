@@ -1,6 +1,6 @@
 import { useEffect, useState, FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Github } from 'lucide-react';
+import { ArrowRight, FolderTree, Github } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,6 +13,7 @@ import { api, RepositorySummary } from '@/api/client';
 export function RepositoriesPage() {
   const [repos, setRepos] = useState<RepositorySummary[] | null>(null);
   const [url, setUrl] = useState('');
+  const [subpath, setSubpath] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
@@ -33,8 +34,9 @@ export function RepositoriesPage() {
     setError(null);
     setSubmitting(true);
     try {
-      await api.registerRepository(url);
+      await api.registerRepository(url, subpath.trim() || undefined);
       setUrl('');
+      setSubpath('');
       await refresh();
     } catch (err) {
       setError(err);
@@ -82,6 +84,19 @@ export function RepositoriesPage() {
                 className="pl-9"
               />
             </div>
+            <Tooltip content="Optional. For monorepos, the relative path to the package's package.json (e.g. 'backend' or 'apps/web'). Leave empty for single-package repos.">
+              <div className="relative sm:w-56">
+                <FolderTree className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  type="text"
+                  placeholder="subpath (optional)"
+                  value={subpath}
+                  onChange={(e) => setSubpath(e.target.value)}
+                  disabled={submitting}
+                  className="pl-9"
+                />
+              </div>
+            </Tooltip>
             <Button type="submit" disabled={submitting || !url}>
               {submitting ? 'Adding…' : 'Add repository'}
             </Button>
@@ -119,6 +134,11 @@ export function RepositoriesPage() {
                     <div className="min-w-0">
                       <div className="truncate font-medium">
                         {r.owner}/{r.name}
+                        {r.subpath && (
+                          <span className="ml-1.5 font-mono text-xs font-normal text-muted-foreground">
+                            /{r.subpath}
+                          </span>
+                        )}
                       </div>
                       <div className="truncate text-xs text-muted-foreground">
                         {r.lastAnalyzedAt

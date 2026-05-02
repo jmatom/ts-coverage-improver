@@ -98,14 +98,21 @@ export class RunImprovementJob implements JobExecutor {
         return;
       }
 
-      const workdir = join(this.deps.jobWorkdirRoot, `job-${job.id}`);
-      await log(`Cloning ${repo.cloneUrl} into ${workdir}`);
+      // Clone root: where the entire repo lives.
+      const cloneRoot = join(this.deps.jobWorkdirRoot, `job-${job.id}`);
+      await log(`Cloning ${repo.cloneUrl} into ${cloneRoot}`);
       await this.deps.git.clone({
         cloneUrl: repo.cloneUrl,
         branch: repo.defaultBranch,
-        workdir,
+        workdir: cloneRoot,
         token: this.deps.githubToken,
       });
+
+      // Package root: the directory containing this package's package.json.
+      // Empty subpath = repo root (the common case). All package-level work
+      // (install, tests, AI run, file probes) targets this dir; git operations
+      // (resetWorkdir, push) stay at cloneRoot.
+      const workdir = repo.subpath ? join(cloneRoot, repo.subpath) : cloneRoot;
 
       // Fast-fail: if the source file the user asked to improve isn't in the
       // clone, the report is stale (file renamed/deleted upstream). Bail
@@ -166,7 +173,9 @@ export class RunImprovementJob implements JobExecutor {
           lastModeRun = mode;
           for (let attempt = 1; attempt <= MAX_ATTEMPTS_PER_MODE; attempt++) {
             await log(`Attempt ${attempt} (${mode}-mode)`);
-            await this.deps.git.resetWorkdir(workdir);
+            // git operates on the whole repo (subtree resets too), so reset
+            // from cloneRoot — workdir might be a subpath of it for monorepos.
+            await this.deps.git.resetWorkdir(cloneRoot);
             const result = await this.runOneAttempt({
               workdir,
               job,
@@ -218,10 +227,17 @@ export class RunImprovementJob implements JobExecutor {
       const remoteUrl = `https://x-access-token:${this.deps.githubToken}@github.com/${fork.owner}/${fork.name}.git`;
       const message = `test: improve coverage for ${job.targetFilePath} (${success.coverageBefore.toFixed(0)}% → ${success.coverageAfter.toFixed(0)}%)`;
       await log(`Pushing branch ${branch} to fork ${fork.owner}/${fork.name}`);
+      // git push from the repo root (cloneRoot). `success.writtenFiles` came
+      // from the AI's view (paths relative to the package root), so prefix
+      // them with the repo's subpath so commitAndPush can resolve them
+      // relative to cloneRoot. Empty subpath = no prefix needed.
+      const filesToAdd = repo.subpath
+        ? success.writtenFiles.map((f) => `${repo.subpath}/${f}`)
+        : success.writtenFiles;
       await this.deps.git.commitAndPush({
-        workdir,
+        workdir: cloneRoot,
         branch,
-        filesToAdd: success.writtenFiles,
+        filesToAdd,
         message,
         remoteUrl,
       });

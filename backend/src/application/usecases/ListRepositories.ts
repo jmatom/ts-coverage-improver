@@ -22,6 +22,7 @@ export class ListRepositories {
         lastAnalyzedAt: r.lastAnalyzedAt?.toISOString() ?? null,
         overallLinesPct: latest ? round2(latest.overallLinesPct()) : null,
         fileCount: latest?.files.length ?? 0,
+        subpath: r.subpath,
         analysisStatus: r.analysisStatus,
         analysisError: r.analysisError,
         analysisStartedAt: r.analysisStartedAt?.toISOString() ?? null,

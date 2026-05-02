@@ -18,7 +18,7 @@ export class RegisterRepository {
     private readonly github: GitHubPort,
   ) {}
 
-  async execute(input: { url: string }): Promise<RepositorySummaryDto> {
+  async execute(input: { url: string; subpath?: string }): Promise<RepositorySummaryDto> {
     const { owner, name } = Repository.parseUrl(input.url);
 
     const existing = await this.repos.findByOwnerAndName(owner, name);
@@ -34,7 +34,12 @@ export class RegisterRepository {
     if (!meta.forkingAllowed) {
       throw new ForkingDisabledError(`${owner}/${name}`);
     }
-    const repo = Repository.create({ owner, name, defaultBranch: meta.defaultBranch });
+    const repo = Repository.create({
+      owner,
+      name,
+      defaultBranch: meta.defaultBranch,
+      subpath: input.subpath,
+    });
     await this.repos.save(repo);
     return this.toDto(repo);
   }
@@ -49,6 +54,7 @@ export class RegisterRepository {
       lastAnalyzedAt: repo.lastAnalyzedAt?.toISOString() ?? null,
       overallLinesPct: null,
       fileCount: 0,
+      subpath: repo.subpath,
       analysisStatus: repo.analysisStatus,
       analysisError: repo.analysisError,
       analysisStartedAt: repo.analysisStartedAt?.toISOString() ?? null,

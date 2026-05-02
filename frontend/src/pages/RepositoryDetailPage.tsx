@@ -228,6 +228,11 @@ export function RepositoryDetailPage() {
               <Badge variant="secondary">Repository</Badge>
               <CardTitle className="text-2xl">
                 {repo.owner}/{repo.name}
+                {repo.subpath && (
+                  <span className="ml-2 font-mono text-base font-normal text-muted-foreground">
+                    /{repo.subpath}
+                  </span>
+                )}
               </CardTitle>
               <CardDescription>
                 Default branch <code className="font-mono">{repo.defaultBranch}</code>
@@ -241,11 +246,6 @@ export function RepositoryDetailPage() {
                     ? ` · last analyzed ${new Date(repo.lastAnalyzedAt).toLocaleString()}`
                     : ' · not analyzed yet'}
               </CardDescription>
-              {repo.analysisStatus === 'failed' && repo.analysisError && (
-                <p className="mt-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-                  <strong>Last analysis failed:</strong> {repo.analysisError}
-                </p>
-              )}
             </div>
             <div className="flex items-center gap-2">
               <Button onClick={onAnalyze} disabled={analyzing} variant="outline">
@@ -300,6 +300,14 @@ export function RepositoryDetailPage() {
               </Dialog>
             </div>
           </div>
+          {repo.analysisStatus === 'failed' && repo.analysisError && (
+            <p
+              role="alert"
+              className="mt-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive"
+            >
+              <strong>Last analysis failed:</strong> {repo.analysisError}
+            </p>
+          )}
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 sm:grid-cols-3">

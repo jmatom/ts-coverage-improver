@@ -82,6 +82,7 @@ export class RequestRepositoryAnalysis {
       lastAnalyzedAt: repo.lastAnalyzedAt?.toISOString() ?? null,
       overallLinesPct: null,
       fileCount: 0,
+      subpath: repo.subpath,
       analysisStatus: repo.analysisStatus,
       analysisError: repo.analysisError,
       analysisStartedAt: repo.analysisStartedAt?.toISOString() ?? null,

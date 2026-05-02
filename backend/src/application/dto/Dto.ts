@@ -15,6 +15,8 @@ export interface RepositorySummaryDto {
   lastAnalyzedAt: string | null;
   overallLinesPct: number | null; // null if no scan yet
   fileCount: number;
+  /** Subpath inside the cloned repo where this package's `package.json` lives. Empty = repo root. */
+  subpath: string;
   /**
    * Per-repository analyze-coverage lifecycle. Surfaced so the dashboard
    * can render a live status while the worker runs (which can take

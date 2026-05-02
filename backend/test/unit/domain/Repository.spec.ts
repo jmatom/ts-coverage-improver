@@ -27,6 +27,68 @@ describe('Repository', () => {
     expect(repo.lastAnalyzedAt).toEqual(at);
   });
 
+  describe('subpath (monorepo support)', () => {
+    it('defaults to empty string (= repo root)', () => {
+      const repo = Repository.create({ owner: 'a', name: 'b', defaultBranch: 'main' });
+      expect(repo.subpath).toBe('');
+    });
+
+    it('accepts a simple package name', () => {
+      const repo = Repository.create({
+        owner: 'a',
+        name: 'b',
+        defaultBranch: 'main',
+        subpath: 'backend',
+      });
+      expect(repo.subpath).toBe('backend');
+    });
+
+    it('accepts a multi-segment path', () => {
+      const repo = Repository.create({
+        owner: 'a',
+        name: 'b',
+        defaultBranch: 'main',
+        subpath: 'apps/web',
+      });
+      expect(repo.subpath).toBe('apps/web');
+    });
+
+    it('normalizes leading + trailing slashes and whitespace', () => {
+      const repo = Repository.create({
+        owner: 'a',
+        name: 'b',
+        defaultBranch: 'main',
+        subpath: '  /apps/web/  ',
+      });
+      expect(repo.subpath).toBe('apps/web');
+    });
+
+    it('rejects path traversal (..)', () => {
+      expect(() =>
+        Repository.create({ owner: 'a', name: 'b', defaultBranch: 'main', subpath: '../etc' }),
+      ).toThrow();
+      expect(() =>
+        Repository.create({
+          owner: 'a',
+          name: 'b',
+          defaultBranch: 'main',
+          subpath: 'apps/../etc',
+        }),
+      ).toThrow();
+    });
+
+    it('rejects empty inner segments (e.g. apps//web)', () => {
+      expect(() =>
+        Repository.create({
+          owner: 'a',
+          name: 'b',
+          defaultBranch: 'main',
+          subpath: 'apps//web',
+        }),
+      ).toThrow();
+    });
+  });
+
   describe('analysis lifecycle', () => {
     it('starts in idle with no error or startedAt', () => {
       const repo = Repository.create({ owner: 'a', name: 'b', defaultBranch: 'main' });

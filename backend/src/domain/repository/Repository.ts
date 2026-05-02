@@ -11,6 +11,20 @@ export interface RepositoryProps {
   forkOwner: string | null;
   lastAnalyzedAt: Date | null;
   /**
+   * Subpath inside the cloned repo where this package's `package.json`
+   * lives. Empty string = repo root (the common case). Examples: '',
+   * 'backend', 'apps/web', 'packages/core'. Used by analyze + improve
+   * to scope all package-level operations (install, tests, AI run,
+   * file probes) to that subdirectory. Git operations stay at the repo
+   * clone root.
+   *
+   * Invariants enforced at construction (see normalizeSubpath below):
+   *   - never starts with '/' or contains '..' segments
+   *   - leading/trailing slashes trimmed
+   *   - whitespace trimmed
+   */
+  subpath: string;
+  /**
    * Lifecycle of the most recent analyze-coverage request for this repo.
    * `idle` = no work in flight (and either never analyzed, or the last
    * analyze succeeded). `pending` = queued. `running` = worker is in the
@@ -36,6 +50,7 @@ export class Repository {
     owner: string;
     name: string;
     defaultBranch: string;
+    subpath?: string;
   }): Repository {
     if (!input.owner.trim() || !input.name.trim()) {
       throw new DomainInvariantError('Repository.owner and Repository.name must be non-empty');
@@ -47,10 +62,26 @@ export class Repository {
       defaultBranch: input.defaultBranch || 'main',
       forkOwner: null,
       lastAnalyzedAt: null,
+      subpath: Repository.normalizeSubpath(input.subpath ?? ''),
       analysisStatus: 'idle',
       analysisError: null,
       analysisStartedAt: null,
     });
+  }
+
+  /**
+   * Trim, strip leading/trailing slashes, and reject path-traversal attempts.
+   * Empty input → empty string (= repo root, default).
+   */
+  private static normalizeSubpath(raw: string): string {
+    const trimmed = raw.trim().replace(/^\/+/, '').replace(/\/+$/, '');
+    if (trimmed === '') return '';
+    if (trimmed.split('/').some((seg) => seg === '..' || seg === '')) {
+      throw new DomainInvariantError(
+        `Repository.subpath must be a clean relative path (no '..', no leading '/'); got '${raw}'`,
+      );
+    }
+    return trimmed;
   }
 
   static rehydrate(props: RepositoryProps): Repository {
@@ -74,6 +105,9 @@ export class Repository {
   }
   get lastAnalyzedAt(): Date | null {
     return this.props.lastAnalyzedAt;
+  }
+  get subpath(): string {
+    return this.props.subpath;
   }
   get analysisStatus(): AnalysisStatus {
     return this.props.analysisStatus;
