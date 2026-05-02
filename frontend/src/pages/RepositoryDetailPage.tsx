@@ -181,8 +181,9 @@ export function RepositoryDetailPage() {
     setError(null);
     try {
       await api.deleteRepository(id);
-      setDeleteOpen(false);
-      navigate('/');
+      // Navigate before closing the dialog. `replace: true` so the back
+      // button doesn't return to the deleted repo's now-404 URL.
+      navigate('/', { replace: true });
     } catch (e) {
       setError(e);
     } finally {
