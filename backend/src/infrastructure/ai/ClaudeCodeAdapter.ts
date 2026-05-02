@@ -72,17 +72,21 @@ export class ClaudeCodeAdapter implements AICliPort {
 }
 
 async function diffWrittenFiles(workdir: string): Promise<string[]> {
-  // `git status --porcelain` reports modified/added files relative to repo root.
-  // We accept M (modified), A (added), and ?? (untracked) lines. Renames are
-  // unlikely from a single AI run; if they appear we'd see them as R lines.
+  // `git status --porcelain=v1` has a fixed-width header: XY<space><path>
+  // where X is the index status, Y is the worktree status, columns 0..1.
+  // For unstaged-modified files X is space (' M'), so we MUST NOT trim
+  // leading whitespace before slicing — doing so eats the first character
+  // of the path. We strip only the trailing newline.
   const git = simpleGit({ baseDir: workdir });
   const status = await git.raw(['status', '--porcelain']);
   const files: string[] = [];
   for (const rawLine of status.split('\n')) {
-    const line = rawLine.trim();
+    const line = rawLine.replace(/\r$/, '');
     if (!line) continue;
-    const code = line.slice(0, 2).trim();
-    const path = line.slice(3).trim();
+    // Header: XY<space><path>. Path starts at column 3 verbatim.
+    const code = line.slice(0, 2).replace(/ /g, '').trim();
+    const path = line.slice(3);
+    if (!path) continue;
     if (code === 'M' || code === 'A' || code === '??' || code === 'AM' || code === 'MM') {
       files.push(path);
     }
