@@ -76,4 +76,16 @@ export class InMemoryPerRepoQueue implements JobScheduler, RepositoryAnalysisSch
     const current = this.chains.get(repoId);
     if (current) await current;
   }
+
+  /**
+   * Graceful-shutdown helper — wait for all per-repo chains to drain.
+   * Resolves once every chain currently in flight has settled. New work
+   * scheduled DURING the wait is also awaited, since each `enqueue` updates
+   * the same chain reference. Callers should stop accepting new work first
+   * (e.g., by closing the HTTP server) before calling this.
+   */
+  async waitForAllIdle(): Promise<void> {
+    const snapshot = Array.from(this.chains.values());
+    await Promise.allSettled(snapshot);
+  }
 }

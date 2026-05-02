@@ -13,6 +13,7 @@ interface Row {
   analysis_status: string;
   analysis_error: string | null;
   analysis_started_at: string | null;
+  analysis_auto_retry_count: number;
 }
 
 /**
@@ -29,8 +30,9 @@ export class SqliteRepositoryRepository implements RepositoryRepository {
     this.db
       .prepare(
         `INSERT INTO repositories (id, owner, name, default_branch, fork_owner, last_analyzed_at,
-                                   subpath, analysis_status, analysis_error, analysis_started_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                   subpath, analysis_status, analysis_error, analysis_started_at,
+                                   analysis_auto_retry_count)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            owner = excluded.owner,
            name = excluded.name,
@@ -40,7 +42,8 @@ export class SqliteRepositoryRepository implements RepositoryRepository {
            subpath = excluded.subpath,
            analysis_status = excluded.analysis_status,
            analysis_error = excluded.analysis_error,
-           analysis_started_at = excluded.analysis_started_at`,
+           analysis_started_at = excluded.analysis_started_at,
+           analysis_auto_retry_count = excluded.analysis_auto_retry_count`,
       )
       .run(
         props.id,
@@ -53,6 +56,7 @@ export class SqliteRepositoryRepository implements RepositoryRepository {
         props.analysisStatus,
         props.analysisError,
         props.analysisStartedAt ? props.analysisStartedAt.toISOString() : null,
+        props.analysisAutoRetryCount,
       );
   }
 
@@ -103,6 +107,7 @@ export class SqliteRepositoryRepository implements RepositoryRepository {
       analysisStatus: row.analysis_status as AnalysisStatus,
       analysisError: row.analysis_error,
       analysisStartedAt: row.analysis_started_at ? new Date(row.analysis_started_at) : null,
+      analysisAutoRetryCount: row.analysis_auto_retry_count ?? 0,
     });
   }
 }

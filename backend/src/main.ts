@@ -19,6 +19,14 @@ async function bootstrap(): Promise<void> {
   // DomainErrors → friendly 4xx; everything else falls through to default.
   app.useGlobalFilters(new DomainExceptionFilter());
 
+  // Graceful shutdown: hook SIGTERM/SIGINT into Nest's lifecycle, which
+  // triggers `onModuleDestroy` on AppModule (where we drain the per-repo
+  // queue). This is cleanup-only — correctness does NOT depend on a clean
+  // shutdown. Hard kills (kill -9, OOM, host reboot) are handled by the
+  // boot reconciler invariant: any row in `running` state at next boot was
+  // by definition interrupted, and gets one auto-retry.
+  app.enableShutdownHooks();
+
   const port = Number(process.env.PORT ?? 3000);
   await app.listen(port);
   new Logger('Bootstrap').log(`Backend listening on :${port}`);

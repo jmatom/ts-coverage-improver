@@ -15,6 +15,13 @@ export interface ImprovementJobProps {
   createdAt: Date;
   startedAt: Date | null;
   completedAt: Date | null;
+  /**
+   * How many times this row has been automatically resurrected from a
+   * `running` state at process boot (i.e., the worker died mid-execution).
+   * Capped at 1 by the boot reconciler so a poison job that always crashes
+   * the backend can't boot-loop the system.
+   */
+  autoRetryCount: number;
 }
 
 /**
@@ -46,6 +53,7 @@ export class ImprovementJob {
       createdAt: new Date(),
       startedAt: null,
       completedAt: null,
+      autoRetryCount: 0,
     });
   }
 
@@ -88,6 +96,9 @@ export class ImprovementJob {
   }
   get completedAt(): Date | null {
     return this.props.completedAt;
+  }
+  get autoRetryCount(): number {
+    return this.props.autoRetryCount;
   }
 
   isTerminal(): boolean {

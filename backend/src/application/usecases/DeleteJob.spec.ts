@@ -20,6 +20,7 @@ function makeJob(status: 'pending' | 'running' | 'succeeded' | 'failed'): Improv
     createdAt: new Date(),
     startedAt: null,
     completedAt: null,
+    autoRetryCount: 0,
   });
 }
 

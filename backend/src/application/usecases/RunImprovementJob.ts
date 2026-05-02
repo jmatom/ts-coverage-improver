@@ -74,6 +74,11 @@ export class RunImprovementJob implements JobExecutor {
       const fileCov = latest.fileFor(job.targetFilePath);
       if (!fileCov) throw new Error(`File ${job.targetFilePath} missing from latest report`);
 
+      if (job.autoRetryCount > 0) {
+        await log(
+          `Resuming after process crash (auto-retry ${job.autoRetryCount}/1 — previous attempt was interrupted)`,
+        );
+      }
       job.start(fileCov.linesPct);
       await this.deps.jobs.save(job);
       await log(`Started job for ${repo.fullName} :: ${job.targetFilePath}`);

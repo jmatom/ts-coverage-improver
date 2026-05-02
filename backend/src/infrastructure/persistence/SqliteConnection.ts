@@ -58,13 +58,36 @@ export class SqliteConnection {
   }
 
   /**
-   * Mark any `running` job as `failed`. Called once at boot — if a row is
-   * still `running` after process start, the worker must have died mid-job.
-   * Returns the number of rows reconciled.
+   * Boot-time crash recovery for improvement jobs.
+   *
+   * Invariant: a row with `status = 'running'` at process boot was, by
+   * definition, interrupted — no work is allowed to be `running` while the
+   * process isn't alive. This holds for both `kill -9` and graceful shutdown.
+   *
+   * Two-pass behavior:
+   *   1. Auto-retry pass — rows with `auto_retry_count < 1` are flipped back
+   *      to `pending` (started_at cleared, counter incremented). The
+   *      `RecoverPendingWork` use case re-enqueues them right after.
+   *   2. Hard-fail pass — rows that have already been auto-retried once are
+   *      marked `failed` so a poison job can't boot-loop the system.
+   *
+   * Returns counts so the boot logger can surface what happened.
    */
-  reconcileOrphanRunningJobs(reason = 'process restarted mid-execution'): number {
+  reconcileOrphanRunningJobs(): { requeued: number; failed: number } {
+    // Pass 1: under-budget → re-pending
+    const requeueRes = this.db
+      .prepare(
+        `UPDATE improvement_jobs
+            SET status = 'pending',
+                started_at = NULL,
+                auto_retry_count = auto_retry_count + 1
+          WHERE status = 'running' AND auto_retry_count < 1`,
+      )
+      .run();
+
+    // Pass 2: budget exhausted → terminal failure
     const now = new Date().toISOString();
-    const result = this.db
+    const failRes = this.db
       .prepare(
         `UPDATE improvement_jobs
             SET status = 'failed',
@@ -72,37 +95,48 @@ export class SqliteConnection {
                 completed_at = ?
           WHERE status = 'running'`,
       )
-      .run(reason, now);
-    return Number(result.changes);
+      .run(
+        'process restarted mid-execution; auto-retry budget exhausted',
+        now,
+      );
+
+    return { requeued: Number(requeueRes.changes), failed: Number(failRes.changes) };
   }
 
   /**
-   * Same boot-time hygiene for `repositories.analysis_status`. A process
-   * restart mid-analysis (worker actively cloning/installing/testing) would
-   * leave a repo stuck in `running`; mark it `failed` so the dashboard
-   * surfaces the truth instead of pretending the analysis is still
-   * progressing.
+   * Same boot-time crash recovery for `repositories.analysis_status`. Mirror
+   * of `reconcileOrphanRunningJobs` for the analysis lifecycle: under-budget
+   * rows are flipped to `pending` (so `RecoverPendingWork` re-enqueues them),
+   * over-budget rows are marked `failed` for the user to retry manually.
    *
    * Crucially, this only targets `running` rows — NOT `pending` ones. A
    * `pending` row was enqueued but never picked up by a worker; the right
-   * action is to re-enqueue it, which the `RecoverPendingWork` use case
-   * does after this reconciler finishes. Mirror of
-   * `reconcileOrphanRunningJobs` for improvement jobs.
-   *
-   * Returns the number of rows reconciled.
+   * action is to re-enqueue it, which `RecoverPendingWork` handles.
    */
-  reconcileOrphanRunningAnalyses(
-    reason = 'process restarted mid-analysis — please re-analyze',
-  ): number {
-    const result = this.db
+  reconcileOrphanRunningAnalyses(): { requeued: number; failed: number } {
+    const requeueRes = this.db
+      .prepare(
+        `UPDATE repositories
+            SET analysis_status = 'pending',
+                analysis_started_at = NULL,
+                analysis_error = NULL,
+                analysis_auto_retry_count = analysis_auto_retry_count + 1
+          WHERE analysis_status = 'running' AND analysis_auto_retry_count < 1`,
+      )
+      .run();
+
+    const failRes = this.db
       .prepare(
         `UPDATE repositories
             SET analysis_status = 'failed',
                 analysis_error = ?
           WHERE analysis_status = 'running'`,
       )
-      .run(reason);
-    return Number(result.changes);
+      .run(
+        'process restarted mid-analysis; auto-retry budget exhausted — please re-analyze',
+      );
+
+    return { requeued: Number(requeueRes.changes), failed: Number(failRes.changes) };
   }
 
   close(): void {

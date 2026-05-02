@@ -16,6 +16,7 @@ interface Row {
   created_at: string;
   started_at: string | null;
   completed_at: string | null;
+  auto_retry_count: number;
 }
 
 export class SqliteJobRepository implements JobRepository {
@@ -28,8 +29,8 @@ export class SqliteJobRepository implements JobRepository {
         `INSERT INTO improvement_jobs
            (id, repository_id, target_file_path, status, mode, pr_url,
             coverage_before, coverage_after, error,
-            created_at, started_at, completed_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            created_at, started_at, completed_at, auto_retry_count)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            status = excluded.status,
            mode = excluded.mode,
@@ -38,7 +39,8 @@ export class SqliteJobRepository implements JobRepository {
            coverage_after = excluded.coverage_after,
            error = excluded.error,
            started_at = excluded.started_at,
-           completed_at = excluded.completed_at`,
+           completed_at = excluded.completed_at,
+           auto_retry_count = excluded.auto_retry_count`,
       )
       .run(
         p.id,
@@ -53,6 +55,7 @@ export class SqliteJobRepository implements JobRepository {
         p.createdAt.toISOString(),
         p.startedAt ? p.startedAt.toISOString() : null,
         p.completedAt ? p.completedAt.toISOString() : null,
+        p.autoRetryCount,
       );
   }
 
@@ -136,6 +139,7 @@ export class SqliteJobRepository implements JobRepository {
       createdAt: new Date(row.created_at),
       startedAt: row.started_at ? new Date(row.started_at) : null,
       completedAt: row.completed_at ? new Date(row.completed_at) : null,
+      autoRetryCount: row.auto_retry_count ?? 0,
     });
   }
 }

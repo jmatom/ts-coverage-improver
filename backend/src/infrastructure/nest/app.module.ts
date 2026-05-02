@@ -1,4 +1,4 @@
-import { Inject, Module, Logger, OnModuleInit } from '@nestjs/common';
+import { Inject, Module, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { join } from 'node:path';
 import { TOKENS } from './tokens';
 import { GitHubPort } from '@domain/ports/GitHubPort';
@@ -52,16 +52,27 @@ const SQLITE_CONNECTION = 'SqliteConnection';
         if (applied.length) {
           new Logger('SqliteConnection').log(`Applied migrations: ${applied.join(', ')}`);
         }
-        const reconciled = conn.reconcileOrphanRunningJobs();
-        if (reconciled > 0) {
-          new Logger('SqliteConnection').warn(
-            `Reconciled ${reconciled} orphan running job(s) at boot`,
+        const log = new Logger('SqliteConnection');
+        const jobsRes = conn.reconcileOrphanRunningJobs();
+        if (jobsRes.requeued > 0) {
+          log.warn(
+            `Crash recovery: re-enqueued ${jobsRes.requeued} interrupted improvement job(s) for one auto-retry`,
           );
         }
-        const reconciledRepos = conn.reconcileOrphanRunningAnalyses();
-        if (reconciledRepos > 0) {
-          new Logger('SqliteConnection').warn(
-            `Reconciled ${reconciledRepos} orphan running analysis state(s) at boot`,
+        if (jobsRes.failed > 0) {
+          log.warn(
+            `Crash recovery: marked ${jobsRes.failed} improvement job(s) as failed (auto-retry budget exhausted)`,
+          );
+        }
+        const reposRes = conn.reconcileOrphanRunningAnalyses();
+        if (reposRes.requeued > 0) {
+          log.warn(
+            `Crash recovery: re-enqueued ${reposRes.requeued} interrupted analysis(es) for one auto-retry`,
+          );
+        }
+        if (reposRes.failed > 0) {
+          log.warn(
+            `Crash recovery: marked ${reposRes.failed} analysis(es) as failed (auto-retry budget exhausted)`,
           );
         }
         return conn;
@@ -305,12 +316,13 @@ const SQLITE_CONNECTION = 'SqliteConnection';
     },
   ],
 })
-export class AppModule implements OnModuleInit {
+export class AppModule implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger('AppModule');
 
   constructor(
     @Inject(TOKENS.GitHubPort) private readonly github: GitHubPort,
     @Inject(TOKENS.SandboxPort) private readonly sandbox: SandboxPort,
+    @Inject(TOKENS.JobScheduler) private readonly queue: InMemoryPerRepoQueue,
     private readonly recover: RecoverPendingWork,
   ) {}
 
@@ -338,5 +350,34 @@ export class AppModule implements OnModuleInit {
     this.logger.log('Sandbox ready — image present, daemon reachable');
 
     await this.recover.execute();
+  }
+
+  /**
+   * Graceful shutdown: stop accepting new work (Nest already closed the
+   * HTTP server before this hook fires) and wait for the per-repo queue
+   * to drain, capped by `SHUTDOWN_DRAIN_MS` (default 10s).
+   *
+   * This is a niceness — if the timer expires before the queue drains,
+   * any still-running rows will be picked up by the next boot's
+   * reconciler (one free auto-retry). Correctness does not depend on
+   * the wait completing.
+   */
+  async onModuleDestroy(): Promise<void> {
+    const drainMs = Number(process.env.SHUTDOWN_DRAIN_MS ?? 10_000);
+    this.logger.log(`Shutdown signal received — draining queue (up to ${drainMs}ms)`);
+    const drained = this.queue
+      .waitForAllIdle()
+      .then(() => 'drained' as const);
+    const timeout = new Promise<'timeout'>((resolve) =>
+      setTimeout(() => resolve('timeout'), drainMs).unref(),
+    );
+    const outcome = await Promise.race([drained, timeout]);
+    if (outcome === 'drained') {
+      this.logger.log('Queue drained cleanly');
+    } else {
+      this.logger.warn(
+        `Drain deadline (${drainMs}ms) elapsed; in-flight work will be auto-recovered on next boot`,
+      );
+    }
   }
 }

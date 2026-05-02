@@ -105,7 +105,7 @@ describe('SQLite persistence', () => {
       expect(fetched?.analysisError).toBe('npm install timed out');
     });
 
-    it('SqliteConnection.reconcileOrphanRunningAnalyses resets only running rows to failed; leaves pending alone for recovery', async () => {
+    it('SqliteConnection.reconcileOrphanRunningAnalyses targets only running rows; pending and idle untouched', async () => {
       const repo = new SqliteRepositoryRepository(conn.db);
       const a = Repository.create({ owner: 'a', name: 'a', defaultBranch: 'main' });
       a.markAnalysisRequested();
@@ -121,12 +121,12 @@ describe('SQLite persistence', () => {
       // idle — should NOT be touched
       await repo.save(c);
 
-      const reconciled = conn.reconcileOrphanRunningAnalyses();
-      expect(reconciled).toBe(1);
+      const result = conn.reconcileOrphanRunningAnalyses();
+      // Crashed running row → auto-retried (under budget). Pending/idle untouched.
+      expect(result).toEqual({ requeued: 1, failed: 0 });
 
-      expect((await repo.findById(a.id))?.analysisStatus).toBe('failed');
-      expect((await repo.findById(a.id))?.analysisError).toContain('process restarted');
-      // Pending stays pending so the recovery path can re-enqueue it.
+      expect((await repo.findById(a.id))?.analysisStatus).toBe('pending');
+      expect((await repo.findById(a.id))?.analysisAutoRetryCount).toBe(1);
       expect((await repo.findById(b.id))?.analysisStatus).toBe('pending');
       expect((await repo.findById(b.id))?.analysisError).toBeNull();
       expect((await repo.findById(c.id))?.analysisStatus).toBe('idle');
@@ -332,7 +332,7 @@ describe('SQLite persistence', () => {
       expect(lines).toEqual(['first', 'second']);
     });
 
-    it('reconcileOrphanRunningJobs marks running rows as failed', async () => {
+    it('reconcileOrphanRunningJobs auto-retries a crashed running row (counter < 1)', async () => {
       const repos = new SqliteRepositoryRepository(conn.db);
       const jobs = new SqliteJobRepository(conn.db);
       const r = Repository.create({ owner: 'o', name: 'n', defaultBranch: 'main' });
@@ -342,13 +342,119 @@ describe('SQLite persistence', () => {
       j.start(10);
       await jobs.save(j);
 
-      const reconciled = conn.reconcileOrphanRunningJobs('test reason');
-      expect(reconciled).toBe(1);
+      const result = conn.reconcileOrphanRunningJobs();
+      expect(result).toEqual({ requeued: 1, failed: 0 });
+
+      const fetched = await jobs.findById(j.id);
+      expect(fetched?.status).toBe('pending');
+      expect(fetched?.startedAt).toBeNull();
+      expect(fetched?.autoRetryCount).toBe(1);
+      // Row is now safe to be picked up again by RecoverPendingWork.
+    });
+
+    it('reconcileOrphanRunningJobs hard-fails a row whose retry budget is exhausted', async () => {
+      const repos = new SqliteRepositoryRepository(conn.db);
+      const jobs = new SqliteJobRepository(conn.db);
+      const r = Repository.create({ owner: 'o', name: 'n', defaultBranch: 'main' });
+      await repos.save(r);
+
+      // Simulate a row that has already been auto-retried once and crashed
+      // again on the retry — autoRetryCount is at the cap.
+      const j = ImprovementJob.create({ repositoryId: r.id, targetFilePath: 'x.ts' });
+      j.start(10);
+      await jobs.save(j);
+      conn.db
+        .prepare('UPDATE improvement_jobs SET auto_retry_count = 1 WHERE id = ?')
+        .run(j.id);
+
+      const result = conn.reconcileOrphanRunningJobs();
+      expect(result).toEqual({ requeued: 0, failed: 1 });
 
       const fetched = await jobs.findById(j.id);
       expect(fetched?.status).toBe('failed');
-      expect(fetched?.error).toBe('test reason');
+      expect(fetched?.error).toMatch(/auto-retry budget exhausted/);
       expect(fetched?.completedAt).toBeInstanceOf(Date);
+      expect(fetched?.autoRetryCount).toBe(1); // unchanged
+    });
+
+    it('reconcileOrphanRunningJobs leaves pending and terminal rows untouched', async () => {
+      const repos = new SqliteRepositoryRepository(conn.db);
+      const jobs = new SqliteJobRepository(conn.db);
+      const r = Repository.create({ owner: 'o', name: 'n', defaultBranch: 'main' });
+      await repos.save(r);
+
+      const pending = ImprovementJob.create({ repositoryId: r.id, targetFilePath: 'a.ts' });
+      await jobs.save(pending);
+
+      const succeeded = ImprovementJob.create({ repositoryId: r.id, targetFilePath: 'b.ts' });
+      succeeded.start(10);
+      succeeded.succeed({ prUrl: 'u', coverageAfter: 90, mode: 'append' });
+      await jobs.save(succeeded);
+
+      const result = conn.reconcileOrphanRunningJobs();
+      expect(result).toEqual({ requeued: 0, failed: 0 });
+
+      expect((await jobs.findById(pending.id))?.status).toBe('pending');
+      expect((await jobs.findById(succeeded.id))?.status).toBe('succeeded');
+    });
+
+    it('reconcileOrphanRunningAnalyses auto-retries a crashed analysis (counter < 1)', async () => {
+      const repos = new SqliteRepositoryRepository(conn.db);
+      const r = Repository.create({ owner: 'o', name: 'n', defaultBranch: 'main' });
+      r.markAnalysisRequested();
+      r.markAnalysisRunning();
+      await repos.save(r);
+
+      const result = conn.reconcileOrphanRunningAnalyses();
+      expect(result).toEqual({ requeued: 1, failed: 0 });
+
+      const fetched = await repos.findById(r.id);
+      expect(fetched?.analysisStatus).toBe('pending');
+      expect(fetched?.analysisStartedAt).toBeNull();
+      expect(fetched?.analysisError).toBeNull();
+      expect(fetched?.analysisAutoRetryCount).toBe(1);
+    });
+
+    it('reconcileOrphanRunningAnalyses hard-fails when the budget is exhausted', async () => {
+      const repos = new SqliteRepositoryRepository(conn.db);
+      const r = Repository.create({ owner: 'o', name: 'n', defaultBranch: 'main' });
+      r.markAnalysisRequested();
+      r.markAnalysisRunning();
+      await repos.save(r);
+      conn.db
+        .prepare('UPDATE repositories SET analysis_auto_retry_count = 1 WHERE id = ?')
+        .run(r.id);
+
+      const result = conn.reconcileOrphanRunningAnalyses();
+      expect(result).toEqual({ requeued: 0, failed: 1 });
+
+      const fetched = await repos.findById(r.id);
+      expect(fetched?.analysisStatus).toBe('failed');
+      expect(fetched?.analysisError).toMatch(/auto-retry budget exhausted/);
+    });
+
+    it('Repository.markAnalysisRequested resets analysisAutoRetryCount', async () => {
+      const repos = new SqliteRepositoryRepository(conn.db);
+      const r = Repository.create({ owner: 'o', name: 'n', defaultBranch: 'main' });
+      r.markAnalysisRequested();
+      r.markAnalysisRunning();
+      await repos.save(r);
+      conn.db
+        .prepare('UPDATE repositories SET analysis_auto_retry_count = 1 WHERE id = ?')
+        .run(r.id);
+
+      const fetched = (await repos.findById(r.id))!;
+      expect(fetched.analysisAutoRetryCount).toBe(1);
+
+      // Simulate a manual re-request (e.g. user clicked "Re-analyze" after a
+      // crash-recovered failure). The budget should reset to 0 so a future
+      // crash can be auto-recovered again.
+      fetched.markAnalyzed(); // back to idle first
+      fetched.markAnalysisRequested();
+      await repos.save(fetched);
+
+      const after = await repos.findById(r.id);
+      expect(after?.analysisAutoRetryCount).toBe(0);
     });
 
     it('listByRepository returns most recent first', async () => {
