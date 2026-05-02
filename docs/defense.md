@@ -124,16 +124,54 @@ A second adapter is a one-file addition. **Domain and application layers don't c
 
 ---
 
-## Why per-repo serialization matters
+## Scalability: serialize jobs per repository
 
-Spec NFR: *"serialize jobs per repository."* Reason:
+Spec NFR: *"Scalability: serialize jobs per repository."* It looks
+like a serialization rule but it's really a parallelism strategy —
+*serialize at the right granularity so safe concurrency is possible.*
 
-- A repo has **one working tree** you can act on at a time. Two concurrent jobs on the same repo would race on the workdir, race on `git status`, race on lcov files.
-- **Across different repos**, jobs are independent — different forks, different workdirs, different upstream PRs — so they run in parallel.
+**The rule.** Within one repo, jobs run **strictly one at a time** in
+queue order. Across different repos, jobs run **fully in parallel**.
 
-**Implementation:** a `Map<repoId, Promise<void>>` chain. Each enqueue appends to the per-repo chain → ordered execution within a repo, concurrent across repos.
+**Why this granularity.** Two simultaneous jobs on the same repo
+would race on the same fork branch namespace, the same source files,
+and the same coverage baseline — producing competing PRs against the
+same target file. Different repos share none of that, so running them
+concurrently is safe and gives free throughput.
 
-**Stay-honest invariant:** state lives in SQLite. On process restart, any orphan `running` rows are reconciled to `failed` rather than pretended-into-existence.
+**How we achieved it.** `InMemoryPerRepoQueue` keeps a
+`Map<repoId, Promise<void>>`. Each enqueue chains a `.then(...)` onto
+the previous promise for that repo, which is exactly "wait for the
+last job to settle, then run mine." Different keys = independent
+chains = concurrent execution. ~25 lines of code, no external
+dependency, fully testable.
+
+```ts
+const prev = this.chains.get(repoId) ?? Promise.resolve();
+const next = prev.catch(() => undefined).then(() => this.executor.execute(job.id));
+this.chains.set(repoId, next);
+```
+
+**Complementary guard — per-file idempotency.** Per-repo serialization
+queues things up; the idempotency check (`findInFlightForFile`)
+prevents duplicates from queueing in the first place. A second click
+on Improve for the same file while one is in flight returns
+HTTP 409 (`JOB_ALREADY_IN_FLIGHT`) instead of stacking redundant
+work.
+
+**Defensive additions on top** (not required by the spec, but
+production-realistic):
+- Global semaphores cap simultaneous sandbox containers and AI calls
+  *across* all repos (host- and account-bound limits), so 50 active
+  repos don't all fan out at once.
+- Admission control rejects new requests with HTTP 503 once the
+  active job count hits `MAX_QUEUE_DEPTH`.
+
+Both are documented in [`concurrency-and-backpressure.md`](./concurrency-and-backpressure.md).
+
+**Stay-honest invariant:** state lives in SQLite. On process restart,
+any orphan `running` rows are reconciled to `failed` rather than
+pretended-into-existence.
 
 ---
 
