@@ -15,5 +15,6 @@ export const TOKENS = {
   TestSuiteValidator: 'TestSuiteValidator',
   JobScheduler: 'JobScheduler',
   JobExecutor: 'JobExecutor',
+  RepositoryAnalysisScheduler: 'RepositoryAnalysisScheduler',
   Config: 'AppConfig',
 } as const;

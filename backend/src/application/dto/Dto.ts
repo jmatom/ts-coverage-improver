@@ -15,6 +15,15 @@ export interface RepositorySummaryDto {
   lastAnalyzedAt: string | null;
   overallLinesPct: number | null; // null if no scan yet
   fileCount: number;
+  /**
+   * Per-repository analyze-coverage lifecycle. Surfaced so the dashboard
+   * can render a live status while the worker runs (which can take
+   * minutes for a real-world repo). See Repository.analysisStatus for
+   * the transitions.
+   */
+  analysisStatus: 'idle' | 'pending' | 'running' | 'failed';
+  analysisError: string | null;
+  analysisStartedAt: string | null;
 }
 
 export interface FileCoverageDto {

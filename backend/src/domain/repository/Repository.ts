@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { DomainInvariantError, InvalidGitHubUrlError } from '../errors/DomainError';
 
+export type AnalysisStatus = 'idle' | 'pending' | 'running' | 'failed';
+
 export interface RepositoryProps {
   id: string;
   owner: string;
@@ -8,6 +10,17 @@ export interface RepositoryProps {
   defaultBranch: string;
   forkOwner: string | null;
   lastAnalyzedAt: Date | null;
+  /**
+   * Lifecycle of the most recent analyze-coverage request for this repo.
+   * `idle` = no work in flight (and either never analyzed, or the last
+   * analyze succeeded). `pending` = queued. `running` = worker is in the
+   * clone/install/test phase. `failed` = last attempt failed; `analysisError`
+   * has the reason. A successful analysis writes `lastAnalyzedAt` and
+   * transitions back to `idle`.
+   */
+  analysisStatus: AnalysisStatus;
+  analysisError: string | null;
+  analysisStartedAt: Date | null;
 }
 
 /**
@@ -34,6 +47,9 @@ export class Repository {
       defaultBranch: input.defaultBranch || 'main',
       forkOwner: null,
       lastAnalyzedAt: null,
+      analysisStatus: 'idle',
+      analysisError: null,
+      analysisStartedAt: null,
     });
   }
 
@@ -59,6 +75,18 @@ export class Repository {
   get lastAnalyzedAt(): Date | null {
     return this.props.lastAnalyzedAt;
   }
+  get analysisStatus(): AnalysisStatus {
+    return this.props.analysisStatus;
+  }
+  get analysisError(): string | null {
+    return this.props.analysisError;
+  }
+  get analysisStartedAt(): Date | null {
+    return this.props.analysisStartedAt;
+  }
+  get isAnalyzing(): boolean {
+    return this.props.analysisStatus === 'pending' || this.props.analysisStatus === 'running';
+  }
 
   get fullName(): string {
     return `${this.props.owner}/${this.props.name}`;
@@ -74,6 +102,38 @@ export class Repository {
 
   markAnalyzed(at: Date = new Date()): void {
     this.props.lastAnalyzedAt = at;
+    this.props.analysisStatus = 'idle';
+    this.props.analysisError = null;
+    this.props.analysisStartedAt = null;
+  }
+
+  /** Transition to `pending` (request received). Allowed from any non-running state. */
+  markAnalysisRequested(): void {
+    if (this.props.analysisStatus === 'running') {
+      throw new DomainInvariantError(
+        'Cannot request a new analysis while one is currently running for this repository',
+      );
+    }
+    this.props.analysisStatus = 'pending';
+    this.props.analysisError = null;
+    this.props.analysisStartedAt = null;
+  }
+
+  /** Transition to `running`. Worker calls this when it picks up a pending job. */
+  markAnalysisRunning(at: Date = new Date()): void {
+    if (this.props.analysisStatus !== 'pending') {
+      throw new DomainInvariantError(
+        `Cannot start analysis from status '${this.props.analysisStatus}'; expected 'pending'`,
+      );
+    }
+    this.props.analysisStatus = 'running';
+    this.props.analysisStartedAt = at;
+  }
+
+  /** Transition to `failed`, recording the reason. Worker calls this on exception. */
+  markAnalysisFailed(error: string): void {
+    this.props.analysisStatus = 'failed';
+    this.props.analysisError = error;
   }
 
   toPlain(): RepositoryProps {

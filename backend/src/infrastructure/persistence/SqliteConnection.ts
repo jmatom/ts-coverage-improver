@@ -76,6 +76,27 @@ export class SqliteConnection {
     return Number(result.changes);
   }
 
+  /**
+   * Same boot-time hygiene for `repositories.analysis_status`. A process
+   * restart mid-analysis would leave repos stuck in `pending`/`running`;
+   * mark them `failed` with a clear reason so the dashboard surfaces the
+   * truth instead of pretending the analysis is still progressing.
+   * Returns the number of rows reconciled.
+   */
+  reconcileOrphanRunningAnalyses(
+    reason = 'process restarted mid-analysis — please re-analyze',
+  ): number {
+    const result = this.db
+      .prepare(
+        `UPDATE repositories
+            SET analysis_status = 'failed',
+                analysis_error = ?
+          WHERE analysis_status IN ('pending', 'running')`,
+      )
+      .run(reason);
+    return Number(result.changes);
+  }
+
   close(): void {
     this.db.close();
   }

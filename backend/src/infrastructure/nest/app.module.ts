@@ -26,6 +26,7 @@ import { RequestImprovementJob } from '@application/usecases/RequestImprovementJ
 import { GetJobStatus } from '@application/usecases/GetJobStatus';
 import { ListJobs } from '@application/usecases/ListJobs';
 import { AnalyzeRepositoryCoverage } from '@application/usecases/AnalyzeRepositoryCoverage';
+import { RequestRepositoryAnalysis } from '@application/usecases/RequestRepositoryAnalysis';
 import { RunImprovementJob } from '@application/usecases/RunImprovementJob';
 import { DeleteRepository } from '@application/usecases/DeleteRepository';
 import { DeleteJob } from '@application/usecases/DeleteJob';
@@ -54,6 +55,12 @@ const SQLITE_CONNECTION = 'SqliteConnection';
         if (reconciled > 0) {
           new Logger('SqliteConnection').warn(
             `Reconciled ${reconciled} orphan running job(s) at boot`,
+          );
+        }
+        const reconciledRepos = conn.reconcileOrphanRunningAnalyses();
+        if (reconciledRepos > 0) {
+          new Logger('SqliteConnection').warn(
+            `Reconciled ${reconciledRepos} orphan running analysis state(s) at boot`,
           );
         }
         return conn;
@@ -174,6 +181,15 @@ const SQLITE_CONNECTION = 'SqliteConnection';
         new InMemoryPerRepoQueue(executor, jobs),
       inject: [TOKENS.JobExecutor, TOKENS.JobRepository],
     },
+    // Same physical queue instance also satisfies the analysis scheduler
+    // port. Both improvement jobs and analyze-coverage runs share a single
+    // `Map<repoId, Promise>` chain — they're serialized per-repo against
+    // each other, which is the correct invariant since both contend for
+    // the cloned workdir.
+    {
+      provide: TOKENS.RepositoryAnalysisScheduler,
+      useExisting: TOKENS.JobScheduler,
+    },
 
     // Use cases
     {
@@ -218,6 +234,19 @@ const SQLITE_CONNECTION = 'SqliteConnection';
         TOKENS.GitPort,
         TOKENS.CoverageRunnerPort,
         TOKENS.Config,
+      ],
+    },
+    {
+      provide: RequestRepositoryAnalysis,
+      useFactory: (
+        repos: SqliteRepositoryRepository,
+        scheduler: InMemoryPerRepoQueue,
+        analyze: AnalyzeRepositoryCoverage,
+      ) => new RequestRepositoryAnalysis(repos, scheduler, analyze),
+      inject: [
+        TOKENS.RepositoryRepository,
+        TOKENS.RepositoryAnalysisScheduler,
+        AnalyzeRepositoryCoverage,
       ],
     },
     {

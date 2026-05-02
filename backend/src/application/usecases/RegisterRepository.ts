@@ -49,6 +49,9 @@ export class RegisterRepository {
       lastAnalyzedAt: repo.lastAnalyzedAt?.toISOString() ?? null,
       overallLinesPct: null,
       fileCount: 0,
+      analysisStatus: repo.analysisStatus,
+      analysisError: repo.analysisError,
+      analysisStartedAt: repo.analysisStartedAt?.toISOString() ?? null,
     };
   }
 }

@@ -1,6 +1,8 @@
 // Lightweight fetch wrapper. The Vite dev server proxies /api → backend on
 // :3000 (see vite.config.ts). In production we ship the same proxy via nginx.
 
+export type AnalysisStatus = 'idle' | 'pending' | 'running' | 'failed';
+
 export interface RepositorySummary {
   id: string;
   owner: string;
@@ -10,6 +12,15 @@ export interface RepositorySummary {
   lastAnalyzedAt: string | null;
   overallLinesPct: number | null;
   fileCount: number;
+  /**
+   * Per-repository analyze-coverage lifecycle. The backend returns 202 from
+   * POST /repositories/:id/refresh and the actual work runs on the per-repo
+   * queue worker (which can take minutes). The dashboard polls this
+   * summary to observe pending → running → idle/failed transitions.
+   */
+  analysisStatus: AnalysisStatus;
+  analysisError: string | null;
+  analysisStartedAt: string | null;
 }
 
 export interface FileCoverage {
@@ -114,8 +125,12 @@ export const api = {
       );
     }
   },
+  // Returns 202 + the repo summary in `analysisStatus: 'pending'` state
+  // immediately. The actual analysis runs on the backend's per-repo queue
+  // and may take seconds to minutes. Poll listRepositories to observe
+  // status transitions.
   refreshRepository: (id: string) =>
-    request<{ commitSha: string; fileCount: number }>(`/repositories/${id}/refresh`, {
+    request<RepositorySummary>(`/repositories/${id}/refresh`, {
       method: 'POST',
     }),
   listLowCoverageFiles: (id: string, threshold = 80) =>

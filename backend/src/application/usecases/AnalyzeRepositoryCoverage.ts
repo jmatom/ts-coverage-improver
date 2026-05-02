@@ -19,12 +19,25 @@ export interface AnalyzeRepositoryCoverageDeps {
 }
 
 /**
- * Analyze a repository's coverage:
- *   1. Clone (using the repo's default branch).
- *   2. If `coverage/lcov.info` is committed, parse it directly.
- *   3. Otherwise, invoke `coverageRunner.run(...)` which detects framework
+ * Worker-side use case: actually analyze a repository's coverage.
+ *
+ *   1. Transition repo `analysisStatus` to `running`.
+ *   2. Clone (using the repo's default branch).
+ *   3. If `coverage/lcov.info` is committed, parse it directly.
+ *   4. Otherwise, invoke `coverageRunner.run(...)` which detects framework
  *      and runs install+tests in the sandbox.
- *   4. Persist a CoverageReport keyed by commit SHA, mark repo analyzed.
+ *   5. Persist a CoverageReport keyed by commit SHA.
+ *   6. Transition repo to `idle` (and update lastAnalyzedAt) on success,
+ *      or `failed` (with the error message) on any thrown exception.
+ *
+ * The request-side use case `RequestRepositoryAnalysis` is what the HTTP
+ * controller calls — it transitions the repo to `pending`, enqueues a
+ * call to this `execute()` method on the per-repo queue, and returns
+ * immediately. `execute()` here runs on the queue worker, not the
+ * request thread.
+ *
+ * This class is also safe to call directly (synchronously) from tests
+ * that want to bypass the queue.
  */
 export class AnalyzeRepositoryCoverage {
   constructor(private readonly deps: AnalyzeRepositoryCoverageDeps) {}
@@ -33,6 +46,28 @@ export class AnalyzeRepositoryCoverage {
     const repo = await this.deps.repos.findById(input.repositoryId);
     if (!repo) throw new Error(`Repository not found: ${input.repositoryId}`);
 
+    // Transition pending → running. If the repo wasn't pending (e.g. a test
+    // calls .execute directly without going through Request), this throws —
+    // that's a programming error, fail loud.
+    repo.markAnalysisRunning();
+    await this.deps.repos.save(repo);
+
+    try {
+      const result = await this.runUnsafe(repo);
+      repo.markAnalyzed();
+      await this.deps.repos.save(repo);
+      return result;
+    } catch (e) {
+      const msg = (e as Error).message ?? String(e);
+      repo.markAnalysisFailed(msg);
+      await this.deps.repos.save(repo);
+      throw e;
+    }
+  }
+
+  private async runUnsafe(
+    repo: Repository,
+  ): Promise<{ commitSha: string; fileCount: number }> {
     const workdir = join(this.deps.jobWorkdirRoot, `analyze-${repo.id}`);
     const { commitSha } = await this.deps.git.clone({
       cloneUrl: repo.cloneUrl,
@@ -67,9 +102,6 @@ export class AnalyzeRepositoryCoverage {
       files: enrichedFiles,
     });
     await this.deps.reports.save(report);
-
-    repo.markAnalyzed();
-    await this.deps.repos.save(repo);
 
     return { commitSha, fileCount: result.files.length };
   }

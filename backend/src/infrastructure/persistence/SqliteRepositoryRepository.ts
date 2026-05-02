@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
-import { Repository } from '@domain/repository/Repository';
+import { AnalysisStatus, Repository } from '@domain/repository/Repository';
 import { RepositoryRepository } from '@domain/ports/RepositoryRepository';
 
 interface Row {
@@ -9,6 +9,9 @@ interface Row {
   default_branch: string;
   fork_owner: string | null;
   last_analyzed_at: string | null;
+  analysis_status: string;
+  analysis_error: string | null;
+  analysis_started_at: string | null;
 }
 
 /**
@@ -24,14 +27,18 @@ export class SqliteRepositoryRepository implements RepositoryRepository {
     const props = repository.toPlain();
     this.db
       .prepare(
-        `INSERT INTO repositories (id, owner, name, default_branch, fork_owner, last_analyzed_at)
-         VALUES (?, ?, ?, ?, ?, ?)
+        `INSERT INTO repositories (id, owner, name, default_branch, fork_owner, last_analyzed_at,
+                                   analysis_status, analysis_error, analysis_started_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            owner = excluded.owner,
            name = excluded.name,
            default_branch = excluded.default_branch,
            fork_owner = excluded.fork_owner,
-           last_analyzed_at = excluded.last_analyzed_at`,
+           last_analyzed_at = excluded.last_analyzed_at,
+           analysis_status = excluded.analysis_status,
+           analysis_error = excluded.analysis_error,
+           analysis_started_at = excluded.analysis_started_at`,
       )
       .run(
         props.id,
@@ -40,6 +47,9 @@ export class SqliteRepositoryRepository implements RepositoryRepository {
         props.defaultBranch,
         props.forkOwner,
         props.lastAnalyzedAt ? props.lastAnalyzedAt.toISOString() : null,
+        props.analysisStatus,
+        props.analysisError,
+        props.analysisStartedAt ? props.analysisStartedAt.toISOString() : null,
       );
   }
 
@@ -79,6 +89,9 @@ export class SqliteRepositoryRepository implements RepositoryRepository {
       defaultBranch: row.default_branch,
       forkOwner: row.fork_owner,
       lastAnalyzedAt: row.last_analyzed_at ? new Date(row.last_analyzed_at) : null,
+      analysisStatus: row.analysis_status as AnalysisStatus,
+      analysisError: row.analysis_error,
+      analysisStartedAt: row.analysis_started_at ? new Date(row.analysis_started_at) : null,
     });
   }
 }

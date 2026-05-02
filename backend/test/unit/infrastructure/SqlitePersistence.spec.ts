@@ -56,6 +56,56 @@ describe('SQLite persistence', () => {
       expect(all).toHaveLength(1);
     });
 
+    it('round-trips analysis-lifecycle fields (running with startedAt)', async () => {
+      const repo = new SqliteRepositoryRepository(conn.db);
+      const r = Repository.create({ owner: 'o', name: 'n', defaultBranch: 'main' });
+      r.markAnalysisRequested();
+      r.markAnalysisRunning(new Date('2026-05-01T11:30:00Z'));
+      await repo.save(r);
+
+      const fetched = await repo.findById(r.id);
+      expect(fetched?.analysisStatus).toBe('running');
+      expect(fetched?.analysisStartedAt?.toISOString()).toBe('2026-05-01T11:30:00.000Z');
+      expect(fetched?.analysisError).toBeNull();
+    });
+
+    it('round-trips analysis-lifecycle fields (failed with error)', async () => {
+      const repo = new SqliteRepositoryRepository(conn.db);
+      const r = Repository.create({ owner: 'o', name: 'n', defaultBranch: 'main' });
+      r.markAnalysisRequested();
+      r.markAnalysisRunning();
+      r.markAnalysisFailed('npm install timed out');
+      await repo.save(r);
+
+      const fetched = await repo.findById(r.id);
+      expect(fetched?.analysisStatus).toBe('failed');
+      expect(fetched?.analysisError).toBe('npm install timed out');
+    });
+
+    it('SqliteConnection.reconcileOrphanRunningAnalyses resets pending+running rows to failed at boot', async () => {
+      const repo = new SqliteRepositoryRepository(conn.db);
+      const a = Repository.create({ owner: 'a', name: 'a', defaultBranch: 'main' });
+      a.markAnalysisRequested();
+      a.markAnalysisRunning();
+      await repo.save(a);
+
+      const b = Repository.create({ owner: 'b', name: 'b', defaultBranch: 'main' });
+      b.markAnalysisRequested(); // pending only — also stuck
+      await repo.save(b);
+
+      const c = Repository.create({ owner: 'c', name: 'c', defaultBranch: 'main' });
+      // idle — should NOT be touched
+      await repo.save(c);
+
+      const reconciled = conn.reconcileOrphanRunningAnalyses();
+      expect(reconciled).toBe(2);
+
+      expect((await repo.findById(a.id))?.analysisStatus).toBe('failed');
+      expect((await repo.findById(a.id))?.analysisError).toContain('process restarted');
+      expect((await repo.findById(b.id))?.analysisStatus).toBe('failed');
+      expect((await repo.findById(c.id))?.analysisStatus).toBe('idle');
+    });
+
     it('upserts on save with same id', async () => {
       const repo = new SqliteRepositoryRepository(conn.db);
       const r = Repository.create({ owner: 'o', name: 'n', defaultBranch: 'main' });

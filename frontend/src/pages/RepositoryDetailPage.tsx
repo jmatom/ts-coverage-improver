@@ -50,7 +50,6 @@ export function RepositoryDetailPage() {
   // server's `DEFAULT_COVERAGE_THRESHOLD` rather than a hardcoded literal.
   const [threshold, setThreshold] = useState(80);
   const [thresholdReady, setThresholdReady] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
   const [requesting, setRequesting] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [toast, setToast] = useState<ToastInput | null>(null);
@@ -99,24 +98,30 @@ export function RepositoryDetailPage() {
     void load();
   }, [load, thresholdReady]);
 
-  // Poll while any job is in-flight
+  // Poll while any job is in-flight, OR while an analysis is in flight.
+  // Analyze is async (HTTP 202 returns immediately while a worker on the
+  // per-repo queue does the actual clone + install + tests, which can take
+  // minutes), so the dashboard observes progress by polling the repository
+  // summary's `analysisStatus`.
+  const analyzing = repo?.analysisStatus === 'pending' || repo?.analysisStatus === 'running';
   useEffect(() => {
-    if (!jobs.some((j) => j.status === 'pending' || j.status === 'running')) return;
+    const jobInFlight = jobs.some((j) => j.status === 'pending' || j.status === 'running');
+    if (!jobInFlight && !analyzing) return;
     const t = setInterval(() => void load(), 3000);
     return () => clearInterval(t);
-  }, [jobs, load]);
+  }, [jobs, analyzing, load]);
 
   const onAnalyze = async () => {
     if (!id) return;
-    setRefreshing(true);
     setError(null);
     try {
-      await api.refreshRepository(id);
-      await load();
+      // Returns 202 immediately with analysisStatus='pending'. Update the
+      // local repo so the button flips to "Analyzing…" without waiting
+      // for the next 3s poll tick.
+      const updated = await api.refreshRepository(id);
+      setRepo(updated);
     } catch (e) {
       setError(e);
-    } finally {
-      setRefreshing(false);
     }
   };
 
@@ -218,16 +223,29 @@ export function RepositoryDetailPage() {
               </CardTitle>
               <CardDescription>
                 Default branch <code className="font-mono">{repo.defaultBranch}</code>
-                {repo.lastAnalyzedAt
-                  ? ` · last analyzed ${new Date(repo.lastAnalyzedAt).toLocaleString()}`
-                  : ' · not analyzed yet'}
+                {analyzing
+                  ? repo.analysisStatus === 'pending'
+                    ? ' · analysis queued…'
+                    : repo.analysisStartedAt
+                      ? ` · analyzing since ${new Date(repo.analysisStartedAt).toLocaleTimeString()}`
+                      : ' · analyzing…'
+                  : repo.lastAnalyzedAt
+                    ? ` · last analyzed ${new Date(repo.lastAnalyzedAt).toLocaleString()}`
+                    : ' · not analyzed yet'}
               </CardDescription>
+              {repo.analysisStatus === 'failed' && repo.analysisError && (
+                <p className="mt-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                  <strong>Last analysis failed:</strong> {repo.analysisError}
+                </p>
+              )}
             </div>
             <div className="flex items-center gap-2">
-              <Button onClick={onAnalyze} disabled={refreshing} variant="outline">
-                <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-                {refreshing
-                  ? 'Analyzing…'
+              <Button onClick={onAnalyze} disabled={analyzing} variant="outline">
+                <RefreshCw className={`mr-2 h-4 w-4 ${analyzing ? 'animate-spin' : ''}`} />
+                {analyzing
+                  ? repo.analysisStatus === 'pending'
+                    ? 'Queued…'
+                    : 'Analyzing…'
                   : repo.lastAnalyzedAt
                     ? 'Re-analyze'
                     : 'Analyze'}

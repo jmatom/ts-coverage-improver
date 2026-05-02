@@ -13,7 +13,7 @@ import {
 import { RegisterRepository } from '@application/usecases/RegisterRepository';
 import { ListRepositories } from '@application/usecases/ListRepositories';
 import { ListLowCoverageFiles } from '@application/usecases/ListLowCoverageFiles';
-import { AnalyzeRepositoryCoverage } from '@application/usecases/AnalyzeRepositoryCoverage';
+import { RequestRepositoryAnalysis } from '@application/usecases/RequestRepositoryAnalysis';
 import { RequestImprovementJob } from '@application/usecases/RequestImprovementJob';
 import { DeleteRepository } from '@application/usecases/DeleteRepository';
 import { RegisterRepositoryRequestDto } from './dto/RegisterRepositoryRequestDto';
@@ -29,7 +29,7 @@ export class RepositoriesController {
     private readonly register: RegisterRepository,
     private readonly listAll: ListRepositories,
     private readonly listLow: ListLowCoverageFiles,
-    private readonly analyze: AnalyzeRepositoryCoverage,
+    private readonly requestAnalysis: RequestRepositoryAnalysis,
     private readonly requestJob: RequestImprovementJob,
     private readonly removeRepo: DeleteRepository,
     @Inject(TOKENS.RepositoryRepository) private readonly repos: RepositoryRepository,
@@ -61,9 +61,14 @@ export class RepositoriesController {
   }
 
   @Post(':id/refresh')
+  @HttpCode(202)
   async refresh(@Param('id') id: string) {
     await this.assertRepoExists(id);
-    return this.analyze.execute({ repositoryId: id });
+    // Returns 202 immediately with the repo summary in the new "pending"
+    // state. The actual analysis (clone + install + tests, can take
+    // minutes) runs on the per-repo queue worker. The dashboard polls
+    // GET /repositories to observe the status transition.
+    return this.requestAnalysis.execute({ repositoryId: id });
   }
 
   @Post(':id/jobs')
