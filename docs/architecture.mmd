@@ -24,7 +24,7 @@ flowchart TB
         direction TB
         Claude[Claude Code CLI<br/>-p headless]
         TestRunner[npm install + jest/vitest/mocha<br/>--coverage]
-        Workspace[/workspace<br/>cloned repo]
+        Workspace["/workspace<br/>cloned repo"]
         Claude -.writes.-> Workspace
         TestRunner -.reads.-> Workspace
     end
