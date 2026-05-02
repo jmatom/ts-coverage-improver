@@ -66,10 +66,11 @@ export class DockerSandbox implements SandboxPort {
     const start = Date.now();
     const envArr = Object.entries(input.env ?? {}).map(([k, v]) => `${k}=${v}`);
     const timeoutMs = input.timeoutMs ?? this.defaultTimeoutMs;
+    const cmd = wrapWithNodeVersion(input.cmd, input.nodeVersion);
 
     const container = await this.docker.createContainer({
       Image: this.image,
-      Cmd: input.cmd,
+      Cmd: cmd,
       Env: envArr,
       WorkingDir: '/workspace',
       Tty: false,
@@ -138,6 +139,36 @@ async function readLogStream(
     timestamps: false,
   })) as unknown as Buffer;
   return stripDockerHeaders(Buffer.from(stream));
+}
+
+/**
+ * Wrap argv with `fnm exec --using <major>` when a per-job Node version is
+ * requested. The sandbox image pre-installs a fixed set of majors (see
+ * sandbox/Dockerfile). When `nodeVersion` is omitted, the command runs as
+ * argv directly on the image's baked-in Node — zero wrapper overhead.
+ *
+ * Why `bash -c` (non-login): the Dockerfile's `ENV PATH=...` puts fnm on
+ * PATH for non-login shells. A login shell (`-l`) re-sources `/etc/profile`
+ * and clobbers PATH back to the system default, dropping fnm. `bash -c`
+ * inherits the container env cleanly. The argv elements are joined with
+ * shell-safe quoting because fnm's `--` passthrough still goes through
+ * bash's lexer.
+ */
+export function wrapWithNodeVersion(cmd: string[], nodeVersion?: string): string[] {
+  if (!nodeVersion) return cmd;
+  const quoted = cmd.map(shellQuote).join(' ');
+  return [
+    'bash',
+    '-c',
+    `fnm exec --using=${shellQuote(nodeVersion)} -- ${quoted}`,
+  ];
+}
+
+/** Conservative single-quote shell escape — never produces unquoted output. */
+function shellQuote(arg: string): string {
+  // Wrap in single quotes; escape any embedded single-quote by closing,
+  // adding a literal `\'`, and reopening. Standard bash idiom.
+  return `'${arg.replace(/'/g, `'\\''`)}'`;
 }
 
 function stripDockerHeaders(buf: Buffer): string {

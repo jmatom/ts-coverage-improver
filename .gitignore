@@ -1,7 +1,12 @@
 node_modules/
 dist/
 build/
-coverage/
+# Anchored to package roots — an unanchored `coverage/` matches any
+# directory named coverage at any depth, accidentally hiding real source
+# under `src/.../coverage/`.
+/coverage/
+/backend/coverage/
+/frontend/coverage/
 
 # Local env (no secrets in git)
 .env

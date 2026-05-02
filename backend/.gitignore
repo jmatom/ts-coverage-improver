@@ -1,6 +1,9 @@
 node_modules
 dist
-coverage
+# Anchored: only ignore the jest/Istanbul output dir at the backend root.
+# An unanchored `coverage` would also exclude src/domain/coverage and
+# src/infrastructure/coverage — both of which contain real source files.
+/coverage
 *.log
 .env
 .env.local

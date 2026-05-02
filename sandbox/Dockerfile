@@ -15,7 +15,7 @@
 FROM node:20-slim
 
 RUN apt-get update \
- && apt-get install -y --no-install-recommends git ca-certificates curl \
+ && apt-get install -y --no-install-recommends git ca-certificates curl unzip \
  && rm -rf /var/lib/apt/lists/*
 
 # Claude Code CLI — drives the AICliPort default adapter. Other adapters
@@ -25,6 +25,21 @@ RUN npm install -g @anthropic-ai/claude-code@latest \
 
 # Enable corepack so we can support pnpm/yarn projects without per-job installs.
 RUN corepack enable
+
+# fnm — fast Node manager (Rust). Lets us switch the Node major per job
+# based on the project's `.nvmrc` or `engines.node` pin (see
+# NodeVersionDetector). Pre-install the supported set so per-job switching
+# is instant; Node 20 (already in the base image) stays the default
+# fallback when no pin is detected, preserving zero-overhead runs for
+# projects that don't pin a version.
+ENV FNM_DIR=/usr/local/share/fnm
+ENV PATH=/usr/local/share/fnm:$PATH
+RUN curl -fsSL https://fnm.vercel.app/install \
+      | bash -s -- --skip-shell --install-dir /usr/local/share/fnm \
+ && /usr/local/share/fnm/fnm install 18 \
+ && /usr/local/share/fnm/fnm install 22 \
+ && /usr/local/share/fnm/fnm install 24 \
+ && chmod -R a+rX /usr/local/share/fnm
 
 # Drop privileges before the container runs.
 #

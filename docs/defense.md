@@ -274,8 +274,9 @@ These are decisions made after the spec was satisfied, in service of "would this
 | **Burst load saturating Anthropic / dockerd** | Two typed semaphores (`MAX_CONCURRENT_SANDBOXES=4`, `MAX_CONCURRENT_AI_CALLS=2`) enforce host-bound vs account-bound concurrency caps independently. `MAX_QUEUE_DEPTH=50` admission-control on the API side returns **HTTP 503** if the active-job count crosses it — bounded memory, predictable failure mode |
 | **Event-loop blocking from in-process CPU work** | `monitorEventLoopDelay` polled at 1Hz, warns when worst-case stall ≥ 50ms. Threshold env-configurable. Hot-path `readFileSync`/`existsSync` already converted to `fs/promises` versions |
 | **Monorepo support** | Optional `subpath` at registration. `Repository` aggregate validates (rejects `..` traversal). `AnalyzeRepositoryCoverage` and `RunImprovementJob` split workdir into `cloneRoot` (git ops) vs `packageRoot` (install/tests/AI). Empty subpath = repo root, single-package behavior unchanged |
+| **Per-project Node version** | Sandbox image bakes Node 20 + pre-installs 18 / 22 / 24 via fnm. `NodeVersionDetector` reads `.nvmrc` → `engines.node` → falls back to baked Node 20. Each install/test sandbox call wraps `cmd` with `fnm exec --using=<major>` only when a pin was detected — projects with no pin pay zero wrapper overhead. Detection result is logged once at the start of every analysis (`Node version: 22 (detected from engines.node="^22")`) so the user can see exactly which runtime ran their tests |
 
-Each one is small (≤ ~150 LOC), surfaces through a stable env var, and has at least one unit test pinning the behavior. **165/165 tests** across 21 suites.
+Each one is small (≤ ~150 LOC), surfaces through a stable env var, and has at least one unit test pinning the behavior. **185/185 tests** across 23 suites.
 
 ---
 

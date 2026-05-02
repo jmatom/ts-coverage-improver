@@ -7,6 +7,14 @@ export interface SandboxRunInput {
   env?: Record<string, string>;
   /** Hard timeout in milliseconds; container is killed if exceeded. */
   timeoutMs?: number;
+  /**
+   * Optional Node major to run the command under, switching via fnm. The
+   * sandbox image pre-installs a fixed set (see NodeVersionDetector
+   * `SUPPORTED_NODE_MAJORS`); callers should pass one of those. When
+   * omitted, the command runs on the image's baked-in Node 20 with no
+   * fnm wrapper overhead.
+   */
+  nodeVersion?: string;
 }
 
 export interface SandboxRunResult {
