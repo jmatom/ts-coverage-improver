@@ -1,8 +1,13 @@
 /**
  * NOT WIRED.
  *
- * This file is the documented seam for "via any AI CLI" — a working sketch
- * of what a second adapter looks like. It demonstrates:
+ * This file lives under `infrastructure/ai/examples/` to make its
+ * non-production status structurally obvious — the registry never imports
+ * from `examples/`, so this code is statically excluded from the wired
+ * adapter graph.
+ *
+ * It is the documented seam for "via any AI CLI" — a working sketch of
+ * what a second adapter looks like. It demonstrates:
  *
  *   1. The same `TestGenerator` contract — same input/output shape.
  *   2. A different `requiredEnv` (Gemini uses `GEMINI_API_KEY`, not Anthropic's).
@@ -11,9 +16,9 @@
  *      because that strategy is CLI-agnostic.
  *
  * To enable in production:
- *   1. Rename to `GeminiCliTestGenerator.ts` (drop the `.example` suffix).
+ *   1. Move this file up one directory to `infrastructure/ai/`.
  *   2. Add the Gemini CLI install line to `sandbox/Dockerfile`.
- *   3. Register it in `AiModule` and set `AI_CLI=gemini` + `GEMINI_API_KEY`.
+ *   3. Register it in `aiAdapterRegistry` and set `AI_CLI=gemini` + `GEMINI_API_KEY`.
  *
  * No domain or application code changes — that's the whole point.
  */
@@ -25,7 +30,7 @@ import {
   GenerateTestOutput,
 } from '@domain/ports/TestGeneratorPort';
 import { SandboxPort } from '@domain/ports/SandboxPort';
-import { buildTestGenerationPrompt } from './prompt';
+import { buildTestGenerationPrompt } from '../prompt';
 
 export class GeminiCliTestGenerator implements TestGenerator {
   readonly id = 'gemini';

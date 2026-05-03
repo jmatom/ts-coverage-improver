@@ -15,9 +15,10 @@ import { ClaudeCliTestGenerator } from './ClaudeCliTestGenerator';
 const REGISTRY: Record<string, (sandbox: SandboxPort) => TestGenerator> = {
   claude: (s) => new ClaudeCliTestGenerator(s),
   // To enable Gemini in production:
-  //   1. Rename GeminiCliTestGenerator.example.ts → GeminiCliTestGenerator.ts
-  //   2. Add `gemini: (s) => new GeminiCliTestGenerator(s),` here
-  //   3. Add the gemini CLI install line to sandbox/Dockerfile
+  //   1. Move infrastructure/ai/examples/GeminiCliTestGenerator.ts up one
+  //      directory to infrastructure/ai/.
+  //   2. Add `gemini: (s) => new GeminiCliTestGenerator(s),` here.
+  //   3. Add the gemini CLI install line to sandbox/Dockerfile.
 };
 
 export function selectAiAdapter(

@@ -127,7 +127,7 @@ Both are documented in `docs/security.md` with the threat model and an empirical
 The spec says "via **any** AI CLI." That single word drove the whole `TestGenerator` abstraction.
 
 - **Shipped:** the Claude Code adapter — ~50 lines of code. Knows three things: which env var to require (`ANTHROPIC_API_KEY`), how to invoke `claude -p --output-format json`, and how to discover written files via `git status --porcelain` (CLI-agnostic — works for any AI tool that touches files).
-- **Documented seam:** `GeminiCliTestGenerator.example.ts` shows the same shape with a different env var (`GEMINI_API_KEY`) and a different binary. Five-step recipe in the README to enable it for real.
+- **Documented seam:** `infrastructure/ai/examples/GeminiCliTestGenerator.ts` shows the same shape with a different env var (`GEMINI_API_KEY`) and a different binary. The `examples/` directory is statically excluded from the wired registry; moving the file up one level plus a registry line enables it.
 
 A second adapter is a one-file addition. **Domain and application layers don't change.** Whatever AI CLI is adopted internally next year, this seam absorbs it.
 

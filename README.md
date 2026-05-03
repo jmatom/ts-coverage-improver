@@ -84,8 +84,8 @@ A few minutes of demo costs roughly $0.10 in Anthropic credits.
   components (Radix primitives for Dialog/Tooltip/DropdownMenu).
 - **AI seam.** Behind an `TestGenerator` interface; one adapter shipped
   (`ClaudeCliTestGenerator`), one example sketched
-  (`GeminiCliTestGenerator.example.ts`). Adding a new CLI is a single new
-  file plus a registry entry.
+  under `backend/src/infrastructure/ai/examples/GeminiCliTestGenerator.ts`.
+  Adding a new CLI is a single new file plus a registry entry.
 
 The orchestration heart is `RunImprovementJob` — fast-fail gates
 before any sandbox spawn, append-mode primary, conditional
