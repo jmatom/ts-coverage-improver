@@ -5,18 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { JobStatusBadge } from '@/components/JobStatusBadge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
 import { Tooltip } from '@/components/ui/tooltip';
 import { ErrorBanner } from '@/components/ErrorBanner';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
+import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { ApiError, api, JobDetail, RepositorySummary } from '@/api/client';
 
 export function JobDetailPage() {
@@ -106,58 +98,47 @@ export function JobDetailPage() {
             <div className="flex items-center gap-2">
               <JobStatusBadge status={job.status} />
               {job.mode && <Badge variant="outline">{job.mode}</Badge>}
-              <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-                <Tooltip
-                  content={
-                    inFlight
-                      ? 'Cannot delete a job that is still pending or running.'
-                      : 'Delete this job and its logs. The PR (if any) is left intact on GitHub.'
-                  }
+              <Tooltip
+                content={
+                  inFlight
+                    ? 'Cannot delete a job that is still pending or running.'
+                    : 'Delete this job and its logs. The PR (if any) is left intact on GitHub.'
+                }
+              >
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={inFlight}
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={() => setDeleteOpen(true)}
                 >
-                  <DialogTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={inFlight}
-                      className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                    >
-                      <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                      Delete
-                    </Button>
-                  </DialogTrigger>
-                </Tooltip>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Delete this job?</DialogTitle>
-                    <DialogDescription>
-                      The job for{' '}
-                      <span className="font-mono">{job.targetFilePath}</span> and its
-                      logs will be removed from the dashboard.{' '}
-                      <strong>This cannot be undone.</strong>
-                      <br />
-                      <br />
-                      The pull request on GitHub (if any) is <em>not</em> deleted — it
-                      stays open for the upstream maintainer to review or merge.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <DialogFooter>
-                    <Button
-                      variant="outline"
-                      onClick={() => setDeleteOpen(false)}
-                      disabled={deleting}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      onClick={() => void onConfirmDelete()}
-                      disabled={deleting}
-                    >
-                      {deleting ? 'Deleting…' : 'Yes, delete'}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+                  <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                  Delete
+                </Button>
+              </Tooltip>
+              <DeleteConfirmDialog
+                open={deleteOpen}
+                onOpenChange={setDeleteOpen}
+                title="Delete this job?"
+                description={
+                  <>
+                    The job for{' '}
+                    <span className="font-mono break-all">{job.targetFilePath}</span>{' '}
+                    and its logs will be removed from the dashboard.{' '}
+                    <strong>This cannot be undone.</strong>
+                  </>
+                }
+                secondaryNote={
+                  <>
+                    The pull request on GitHub (if any) is <em>not</em> deleted — it
+                    stays open for the upstream maintainer to review or merge.
+                  </>
+                }
+                onConfirm={() => void onConfirmDelete()}
+                confirming={deleting}
+                confirmLabel="Yes, delete"
+                confirmingLabel="Deleting…"
+              />
             </div>
           </div>
         </CardHeader>

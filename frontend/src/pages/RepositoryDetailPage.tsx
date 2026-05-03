@@ -13,15 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
+import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -297,46 +289,38 @@ export function RepositoryDetailPage() {
                       ? 'Re-analyze'
                       : 'Analyze'}
               </Button>
-              <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-                <Tooltip content="Remove this repository from the dashboard. The bot's GitHub fork is left intact (it may have open PRs).">
-                  <DialogTrigger asChild>
-                    <Button variant="outline" className="text-destructive hover:bg-destructive/10 hover:text-destructive">
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Remove
-                    </Button>
-                  </DialogTrigger>
-                </Tooltip>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Remove this repository?</DialogTitle>
-                    <DialogDescription className="break-words">
-                      <span className="font-mono break-all">{repo.owner}/{repo.name}</span>{' '}
-                      and all its coverage reports, improvement jobs, and logs will be
-                      deleted from the dashboard. <strong>This cannot be undone.</strong>
-                    </DialogDescription>
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      The bot's GitHub fork (if any) is <em>not</em> deleted — it may have
-                      open PRs. Remove it manually on GitHub if you want it gone.
-                    </p>
-                  </DialogHeader>
-                  <DialogFooter>
-                    <Button
-                      variant="outline"
-                      onClick={() => setDeleteOpen(false)}
-                      disabled={deleting}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      onClick={() => void onDelete()}
-                      disabled={deleting}
-                    >
-                      {deleting ? 'Removing…' : 'Yes, remove'}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+              <Tooltip content="Remove this repository from the dashboard. The bot's GitHub fork is left intact (it may have open PRs).">
+                <Button
+                  variant="outline"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={() => setDeleteOpen(true)}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Remove
+                </Button>
+              </Tooltip>
+              <DeleteConfirmDialog
+                open={deleteOpen}
+                onOpenChange={setDeleteOpen}
+                title="Remove this repository?"
+                description={
+                  <>
+                    <span className="font-mono break-all">{repo.owner}/{repo.name}</span>{' '}
+                    and all its coverage reports, improvement jobs, and logs will be
+                    deleted from the dashboard. <strong>This cannot be undone.</strong>
+                  </>
+                }
+                secondaryNote={
+                  <>
+                    The bot's GitHub fork (if any) is <em>not</em> deleted — it may have
+                    open PRs. Remove it manually on GitHub if you want it gone.
+                  </>
+                }
+                onConfirm={() => void onDelete()}
+                confirming={deleting}
+                confirmLabel="Yes, remove"
+                confirmingLabel="Removing…"
+              />
             </div>
           </div>
           {repo.analysisStatus === 'failed' && repo.analysisError && (
@@ -666,44 +650,31 @@ export function RepositoryDetailPage() {
           )}
         </CardContent>
       </Card>
-      <Dialog
+      <DeleteConfirmDialog
         open={!!jobToDelete}
         onOpenChange={(open) => {
           if (!open) setJobToDelete(null);
         }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete this job?</DialogTitle>
-            <DialogDescription className="break-words">
-              The job for{' '}
-              <span className="font-mono break-all">{jobToDelete?.targetFilePath}</span>{' '}
-              and its logs will be removed from the dashboard.{' '}
-              <strong>This cannot be undone.</strong>
-            </DialogDescription>
-            <p className="mt-2 text-sm text-muted-foreground">
-              The pull request on GitHub (if any) is <em>not</em> deleted — it stays
-              open for the upstream maintainer to review or merge.
-            </p>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setJobToDelete(null)}
-              disabled={deletingJob}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => void onConfirmDeleteJob()}
-              disabled={deletingJob}
-            >
-              {deletingJob ? 'Deleting…' : 'Yes, delete'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        title="Delete this job?"
+        description={
+          <>
+            The job for{' '}
+            <span className="font-mono break-all">{jobToDelete?.targetFilePath}</span>{' '}
+            and its logs will be removed from the dashboard.{' '}
+            <strong>This cannot be undone.</strong>
+          </>
+        }
+        secondaryNote={
+          <>
+            The pull request on GitHub (if any) is <em>not</em> deleted — it stays
+            open for the upstream maintainer to review or merge.
+          </>
+        }
+        onConfirm={() => void onConfirmDeleteJob()}
+        confirming={deletingJob}
+        confirmLabel="Yes, delete"
+        confirmingLabel="Deleting…"
+      />
     </div>
   );
 }
