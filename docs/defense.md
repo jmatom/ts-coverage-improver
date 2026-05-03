@@ -181,8 +181,15 @@ production-realistic):
 Both are documented in [`concurrency-and-backpressure.md`](./concurrency-and-backpressure.md).
 
 **Stay-honest invariant:** state lives in SQLite. On process restart,
-any orphan `running` rows are reconciled to `failed` rather than
-pretended-into-existence.
+any orphan `running` row (one in `running` status with no live worker —
+unambiguous evidence of a crash, since transitions out of `running`
+only happen on a live worker) is reconciled honestly: under the
+`auto_retry_count` budget it's flipped back to `pending` and
+re-enqueued; over the budget it's hard-failed with
+`"auto-retry budget exhausted"`. Either way, the row is never
+pretended-into-existence as still running. Full mechanics in
+[Reliability — crash recovery story](#reliability--crash-recovery-story)
+below.
 
 ---
 
