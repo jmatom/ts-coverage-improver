@@ -1,5 +1,5 @@
 import { CoverageThreshold } from '../../../src/domain/coverage/CoverageThreshold';
-import { DomainInvariantError } from '../../../src/domain/errors/DomainError';
+import { InvalidCoverageThresholdError } from '../../../src/domain/errors/DomainError';
 
 describe('CoverageThreshold', () => {
   describe('of', () => {
@@ -14,16 +14,16 @@ describe('CoverageThreshold', () => {
     });
 
     it('rejects negatives', () => {
-      expect(() => CoverageThreshold.of(-0.1)).toThrow(DomainInvariantError);
+      expect(() => CoverageThreshold.of(-0.1)).toThrow(InvalidCoverageThresholdError);
     });
 
     it('rejects > 100', () => {
-      expect(() => CoverageThreshold.of(100.01)).toThrow(DomainInvariantError);
+      expect(() => CoverageThreshold.of(100.01)).toThrow(InvalidCoverageThresholdError);
     });
 
     it('rejects NaN/Infinity', () => {
-      expect(() => CoverageThreshold.of(Number.NaN)).toThrow(DomainInvariantError);
-      expect(() => CoverageThreshold.of(Number.POSITIVE_INFINITY)).toThrow(DomainInvariantError);
+      expect(() => CoverageThreshold.of(Number.NaN)).toThrow(InvalidCoverageThresholdError);
+      expect(() => CoverageThreshold.of(Number.POSITIVE_INFINITY)).toThrow(InvalidCoverageThresholdError);
     });
   });
 
@@ -50,11 +50,11 @@ describe('CoverageThreshold', () => {
     });
 
     it('throws on unparseable string input', () => {
-      expect(() => CoverageThreshold.fromInput('weird', 80)).toThrow(DomainInvariantError);
+      expect(() => CoverageThreshold.fromInput('weird', 80)).toThrow(InvalidCoverageThresholdError);
     });
 
     it('throws on out-of-range numeric input', () => {
-      expect(() => CoverageThreshold.fromInput('150', 80)).toThrow(DomainInvariantError);
+      expect(() => CoverageThreshold.fromInput('150', 80)).toThrow(InvalidCoverageThresholdError);
     });
   });
 

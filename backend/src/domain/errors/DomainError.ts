@@ -81,6 +81,36 @@ export class InvalidGitHubUrlError extends DomainError {
   }
 }
 
+// --- Boundary input shape errors (HTTP 400) --------------------------------
+//
+// Thrown by VO constructors at the controller boundary when the raw input
+// (path param, query string, body field) doesn't parse into a valid VO.
+// Distinct from `DomainInvariantError` (which signals a programmer bug — a
+// caller inside the trusted application/domain layer passing nonsense), so
+// the filter can map these to 400 (client-malformed input) and reserve 500
+// for genuine invariant violations.
+
+export class InvalidRepositoryIdError extends DomainError {
+  readonly code = 'INVALID_REPOSITORY_ID';
+  constructor(raw: unknown) {
+    super(`RepositoryId must be a UUID; got '${String(raw)}'`);
+  }
+}
+
+export class InvalidJobIdError extends DomainError {
+  readonly code = 'INVALID_JOB_ID';
+  constructor(raw: unknown) {
+    super(`JobId must be a UUID; got '${String(raw)}'`);
+  }
+}
+
+export class InvalidCoverageThresholdError extends DomainError {
+  readonly code = 'INVALID_COVERAGE_THRESHOLD';
+  constructor(value: unknown) {
+    super(`CoverageThreshold must be a finite number in [0, 100]; got ${String(value)}`);
+  }
+}
+
 // --- Improvement-job request ------------------------------------------------
 
 export class NoCoverageReportError extends DomainError {

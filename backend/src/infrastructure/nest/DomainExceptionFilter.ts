@@ -28,8 +28,11 @@ import { DomainError } from '@domain/errors/DomainError';
  * `HTTP_STATUS_BY_CODE` when you add a new DomainError subclass.
  */
 const HTTP_STATUS_BY_CODE: Record<string, number> = {
-  // 400 — request shape was wrong
+  // 400 — request shape was wrong (boundary input parsing failures)
   INVALID_GITHUB_URL: 400,
+  INVALID_REPOSITORY_ID: 400,
+  INVALID_JOB_ID: 400,
+  INVALID_COVERAGE_THRESHOLD: 400,
 
   // 404 — aggregate not found
   REPOSITORY_NOT_FOUND: 404,
@@ -53,6 +56,11 @@ const HTTP_STATUS_BY_CODE: Record<string, number> = {
 
   // 503 — admission control: system is at capacity, retry later
   QUEUE_DEPTH_EXCEEDED: 503,
+
+  // 500 — programmer error inside the trusted application/domain layer
+  // (illegal state transition, unmet invariant, etc.). Distinct from
+  // the boundary 400 codes above: those signal client-malformed input.
+  DOMAIN_INVARIANT_VIOLATION: 500,
 };
 
 @Catch()
@@ -64,7 +72,18 @@ export class DomainExceptionFilter implements ExceptionFilter {
     const res = ctx.getResponse<Response>();
 
     if (exception instanceof DomainError) {
-      const status = HTTP_STATUS_BY_CODE[exception.code] ?? 422;
+      // Unmapped domain codes default to 500 — an unknown failure class is
+      // safer treated as "the system doesn't know what to do with this"
+      // than as a 4xx (which implies the client could have done something
+      // differently). Add an explicit entry to HTTP_STATUS_BY_CODE when
+      // introducing a new DomainError subclass.
+      const status = HTTP_STATUS_BY_CODE[exception.code] ?? 500;
+      if (status >= 500) {
+        this.logger.error(
+          `Domain error [${exception.code}] mapped to ${status}: ${exception.message}`,
+          exception.stack,
+        );
+      }
       res.status(status).json({
         code: exception.code,
         message: exception.message,

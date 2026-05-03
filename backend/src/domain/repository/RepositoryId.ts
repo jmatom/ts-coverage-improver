@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { DomainInvariantError } from '../errors/DomainError';
+import { InvalidRepositoryIdError } from '../errors/DomainError';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -27,9 +27,7 @@ export class RepositoryId {
 
   static of(raw: string): RepositoryId {
     if (typeof raw !== 'string' || !UUID_PATTERN.test(raw)) {
-      throw new DomainInvariantError(
-        `RepositoryId must be a UUID; got '${raw}'`,
-      );
+      throw new InvalidRepositoryIdError(raw);
     }
     return new RepositoryId(raw);
   }

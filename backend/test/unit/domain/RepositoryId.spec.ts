@@ -1,5 +1,5 @@
 import { RepositoryId } from '../../../src/domain/repository/RepositoryId';
-import { DomainInvariantError } from '../../../src/domain/errors/DomainError';
+import { InvalidRepositoryIdError } from '../../../src/domain/errors/DomainError';
 
 describe('RepositoryId', () => {
   describe('new', () => {
@@ -23,16 +23,16 @@ describe('RepositoryId', () => {
     });
 
     it('rejects a non-UUID string', () => {
-      expect(() => RepositoryId.of('repo-1')).toThrow(DomainInvariantError);
+      expect(() => RepositoryId.of('repo-1')).toThrow(InvalidRepositoryIdError);
     });
 
     it('rejects empty string', () => {
-      expect(() => RepositoryId.of('')).toThrow(DomainInvariantError);
+      expect(() => RepositoryId.of('')).toThrow(InvalidRepositoryIdError);
     });
 
     it('rejects non-string input', () => {
-      expect(() => RepositoryId.of(undefined as unknown as string)).toThrow(DomainInvariantError);
-      expect(() => RepositoryId.of(123 as unknown as string)).toThrow(DomainInvariantError);
+      expect(() => RepositoryId.of(undefined as unknown as string)).toThrow(InvalidRepositoryIdError);
+      expect(() => RepositoryId.of(123 as unknown as string)).toThrow(InvalidRepositoryIdError);
     });
   });
 

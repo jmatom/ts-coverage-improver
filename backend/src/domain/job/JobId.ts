@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { DomainInvariantError } from '../errors/DomainError';
+import { InvalidJobIdError } from '../errors/DomainError';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -19,7 +19,7 @@ export class JobId {
 
   static of(raw: string): JobId {
     if (typeof raw !== 'string' || !UUID_PATTERN.test(raw)) {
-      throw new DomainInvariantError(`JobId must be a UUID; got '${raw}'`);
+      throw new InvalidJobIdError(raw);
     }
     return new JobId(raw);
   }
