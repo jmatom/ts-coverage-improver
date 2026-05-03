@@ -93,10 +93,11 @@ sequenceDiagram
     Note over Backend: --- background promise chain ---
     Backend->>Backend: mark repo running, persist
 
-    Backend->>GitHub: clone default branch (host-side simple-git, PAT in URL)
-    GitHub-->>Backend: source files into per-analyze workdir<br/>(scoped to repo.subpath if set)
+    Backend->>GitHub: clone default branch into cloneRoot<br/>(host-side simple-git, PAT in URL — whole repo, not subpath-scoped)
+    GitHub-->>Backend: source files into cloneRoot
+    Backend->>Backend: resolve packageRoot = cloneRoot[/repo.subpath]<br/>(scopes install + tests for monorepos; git ops stay at cloneRoot)
 
-    Backend->>Sandbox: spawn — detect framework (jest/vitest/mocha+c8/nyc),<br/>npm install, run tests with coverage
+    Backend->>Sandbox: spawn (workdir = packageRoot) — detect framework (jest/vitest/mocha+c8/nyc),<br/>npm install, run tests with coverage
     Sandbox-->>Backend: coverage/lcov.info
 
     Backend->>Backend: LcovParser.parse(lcov.info) → FileCoverage[]
@@ -127,10 +128,10 @@ A few callouts on the analyze sequence:
   surfaced via `analysisError`. The boot reconciler resurrects rows
   stuck in `running` after a backend crash (one auto-retry, then
   hard-fail — see [`concurrency-and-backpressure.md`](./concurrency-and-backpressure.md)).
-- `CoverageReport` rows are immutable and keyed by `(repositoryId, commitSha)` —
+- `CoverageReport` rows are immutable and tagged with `(repositoryId, commitSha)` —
   re-analyzing the same commit produces a new row rather than mutating
-  the previous one. The dashboard always reads the latest by
-  `generated_at`.
+  the previous one (the schema's primary key is the report's UUID, not
+  the pair). The dashboard always reads the latest by `generated_at`.
 
 ## Improvement-job sequence
 
