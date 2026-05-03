@@ -309,15 +309,15 @@ export function RepositoryDetailPage() {
                 <DialogContent>
                   <DialogHeader>
                     <DialogTitle>Remove this repository?</DialogTitle>
-                    <DialogDescription>
-                      <span className="font-mono">{repo.owner}/{repo.name}</span> and all
-                      its coverage reports, improvement jobs, and logs will be deleted
-                      from the dashboard. <strong>This cannot be undone.</strong>
-                      <br />
-                      <br />
+                    <DialogDescription className="break-words">
+                      <span className="font-mono break-all">{repo.owner}/{repo.name}</span>{' '}
+                      and all its coverage reports, improvement jobs, and logs will be
+                      deleted from the dashboard. <strong>This cannot be undone.</strong>
+                    </DialogDescription>
+                    <p className="mt-2 text-sm text-muted-foreground">
                       The bot's GitHub fork (if any) is <em>not</em> deleted — it may have
                       open PRs. Remove it manually on GitHub if you want it gone.
-                    </DialogDescription>
+                    </p>
                   </DialogHeader>
                   <DialogFooter>
                     <Button
@@ -675,16 +675,16 @@ export function RepositoryDetailPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete this job?</DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="break-words">
               The job for{' '}
-              <span className="font-mono">{jobToDelete?.targetFilePath}</span> and its
-              logs will be removed from the dashboard.{' '}
+              <span className="font-mono break-all">{jobToDelete?.targetFilePath}</span>{' '}
+              and its logs will be removed from the dashboard.{' '}
               <strong>This cannot be undone.</strong>
-              <br />
-              <br />
+            </DialogDescription>
+            <p className="mt-2 text-sm text-muted-foreground">
               The pull request on GitHub (if any) is <em>not</em> deleted — it stays
               open for the upstream maintainer to review or merge.
-            </DialogDescription>
+            </p>
           </DialogHeader>
           <DialogFooter>
             <Button
