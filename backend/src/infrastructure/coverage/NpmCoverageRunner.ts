@@ -9,6 +9,11 @@ import { SandboxPort } from '@domain/ports/SandboxPort';
 import { LcovParser } from '@domain/coverage/LcovParser';
 import { FrameworkDetector } from './FrameworkDetector';
 import { describeNodeVersion, detectNodeVersion } from './NodeVersionDetector';
+import {
+  emptySuiteFlags,
+  hasAnyTestFile,
+  writePlaceholderTest,
+} from './EmptySuiteHandling';
 
 /**
  * Real CoverageRunnerPort: runs `<pm> install` + the framework-appropriate
@@ -60,10 +65,40 @@ export class NpmCoverageRunner implements CoverageRunnerPort {
       );
     }
 
+    // Empty-suite handling: a repo with zero tests is a legitimate baseline
+    // (every project starts here). Without intervention jest/vitest exit
+    // non-zero on "no tests found" and our flow short-circuits with a useless
+    // error. Inside the disposable workdir we drop a placeholder test (so
+    // the runner exits 0) and add coverage flags so lcov lists every source
+    // file at 0% — giving the dashboard rows the user can click Improve on.
+    // See EmptySuiteHandling.ts for the per-framework flag set + caveats.
+    let testCmd = detection.testCmd;
+    if (!(await hasAnyTestFile(input.workdir))) {
+      const flags = emptySuiteFlags(detection.framework);
+      if (detection.framework === 'mocha') {
+        // Mocha doesn't need a placeholder (exits 0 on empty suites). Its
+        // empty-suite flags target the *wrapper* (nyc or c8), so they must
+        // be spliced BEFORE the `mocha` binary in the argv — not appended
+        // after it like the jest/vitest case below.
+        const mochaIdx = detection.testCmd.lastIndexOf('mocha');
+        testCmd = [
+          ...detection.testCmd.slice(0, mochaIdx),
+          ...flags,
+          ...detection.testCmd.slice(mochaIdx),
+        ];
+      } else {
+        await writePlaceholderTest(input.workdir, detection.framework);
+        testCmd = [...detection.testCmd, ...flags];
+      }
+      logs.push(
+        `No tests detected — applied empty-suite handling (${detection.framework})`,
+      );
+    }
+
     // Test with coverage
     const test = await this.sandbox.run({
       workdir: input.workdir,
-      cmd: detection.testCmd,
+      cmd: testCmd,
       timeoutMs: 10 * 60_000,
       nodeVersion: sandboxNodeVersion,
     });
