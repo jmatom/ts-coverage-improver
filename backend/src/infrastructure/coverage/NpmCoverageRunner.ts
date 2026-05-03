@@ -9,6 +9,11 @@ import { SandboxPort } from '@domain/ports/SandboxPort';
 import { LcovParser } from '@domain/coverage/LcovParser';
 import { FrameworkDetector } from './FrameworkDetector';
 import { describeNodeVersion, detectNodeVersion } from './NodeVersionDetector';
+import {
+  emptySuiteFlags,
+  hasAnyTestFile,
+  writePlaceholderTest,
+} from './EmptySuiteHandling';
 
 /**
  * Real CoverageRunnerPort: runs `<pm> install` + the framework-appropriate
@@ -60,10 +65,34 @@ export class NpmCoverageRunner implements CoverageRunnerPort {
       );
     }
 
+    // Empty-suite handling: a repo with zero tests is a legitimate baseline
+    // (every project starts here). Without intervention jest/vitest exit
+    // non-zero on "no tests found" and our flow short-circuits with a useless
+    // error. Inside the disposable workdir we drop a placeholder test (so
+    // the runner exits 0) and add coverage flags so lcov lists every source
+    // file at 0% — giving the dashboard rows the user can click Improve on.
+    // See EmptySuiteHandling.ts for the per-framework flag set + caveats.
+    let testCmd = detection.testCmd;
+    if (!(await hasAnyTestFile(input.workdir))) {
+      if (detection.framework === 'mocha') {
+        throw new Error(
+          'No tests found in this repository. Empty-suite handling is currently ' +
+            'supported for jest and vitest only — mocha + nyc/c8 has no equivalent ' +
+            'of jest --collectCoverageFrom. Add at least one test file to proceed.',
+        );
+      }
+      await writePlaceholderTest(input.workdir, detection.framework);
+      testCmd = [...detection.testCmd, ...emptySuiteFlags(detection.framework)];
+      logs.push(
+        'No tests detected — wrote placeholder + appended empty-suite flags ' +
+          `(${detection.framework})`,
+      );
+    }
+
     // Test with coverage
     const test = await this.sandbox.run({
       workdir: input.workdir,
-      cmd: detection.testCmd,
+      cmd: testCmd,
       timeoutMs: 10 * 60_000,
       nodeVersion: sandboxNodeVersion,
     });
