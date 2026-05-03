@@ -1,27 +1,22 @@
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
+import { AgentConfigScrubberPort } from '@domain/ports/AgentConfigScrubberPort';
 
 /**
- * Infrastructure service: pre-AI hardening that deletes any agent-config
- * files an attacker-controlled target repo might have planted to inject
- * instructions into Claude Code (or another AI CLI).
+ * `node:fs`-backed `AgentConfigScrubberPort` implementation.
+ *
+ * Pre-AI hardening: deletes any agent-config files an attacker-controlled
+ * target repo might have planted to inject instructions into Claude Code
+ * (or another AI CLI).
  *
  * The threat: a malicious `package.json` `postinstall` (or a file shipped
  * directly in the repo) can write a `CLAUDE.md`, `.claude/settings.json`,
  * `.cursor/rules/...`, etc. Claude Code reads these at startup as
  * "project context", which is a direct prompt-injection vector.
  *
- * Lives in `infrastructure/security/` because it mutates the filesystem
- * (calls `rm`). The list of paths to scrub is a security policy that
- * could conceivably move to domain in a "what counts as an agent
- * config" sense, but since the policy ships hand-in-hand with the
- * mutation it's clearer to keep them together.
- *
- * `RunImprovementJob` calls this after the install phase but before
- * the AI-invocation phase, so any agent-config the install left behind
- * is also scrubbed.
- *
- * Returns the list of paths actually removed, for logging.
+ * `RunImprovementJob` calls this after the install phase but before the
+ * AI-invocation phase, so any agent-config the install left behind is
+ * also scrubbed.
  */
 const TARGETS: readonly string[] = [
   'CLAUDE.md',
@@ -37,11 +32,11 @@ const TARGETS: readonly string[] = [
   'agents.md',
 ];
 
-export class AgentConfigScrubber {
+export class FsAgentConfigScrubber implements AgentConfigScrubberPort {
   /** Targets exposed for tests; not for runtime use. */
   static readonly targets: readonly string[] = TARGETS;
 
-  static async scrub(workdir: string): Promise<string[]> {
+  async scrub(workdir: string): Promise<string[]> {
     const removed: string[] = [];
     await Promise.all(
       TARGETS.map(async (rel) => {

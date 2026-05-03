@@ -6,13 +6,14 @@ import { RepositoryRepository } from '@domain/ports/RepositoryRepository';
 import { CoverageReportRepository } from '@domain/ports/CoverageReportRepository';
 import { GitPort } from '@domain/ports/GitPort';
 import { CoverageRunnerPort } from '@domain/ports/CoverageRunnerPort';
-import { SiblingTestPathFinder } from '../services/SiblingTestPathFinder';
+import { SiblingTestPathFinderPort } from '@domain/ports/SiblingTestPathFinderPort';
 
 export interface AnalyzeRepositoryCoverageDeps {
   repos: RepositoryRepository;
   reports: CoverageReportRepository;
   git: GitPort;
   coverageRunner: CoverageRunnerPort;
+  siblingTestPathFinder: SiblingTestPathFinderPort;
   /** Where to clone repos for analysis. Each call gets a unique sub-dir. */
   jobWorkdirRoot: string;
   /** PAT for cloning private repos and authenticating. */
@@ -108,7 +109,7 @@ export class AnalyzeRepositoryCoverage {
     // rather than serial-O(N). Keeps the event loop free during analyze.
     const enrichedFiles = await Promise.all(
       result.files.map(async (f) =>
-        f.withHasExistingTest((await SiblingTestPathFinder.findExisting(packageRoot, f.path)) !== null),
+        f.withHasExistingTest((await this.deps.siblingTestPathFinder.findExisting(packageRoot, f.path)) !== null),
       ),
     );
 

@@ -1,24 +1,20 @@
 import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { TestConvention } from '@domain/job/testFileNaming';
+import { TestConventionDetectorPort } from '@domain/ports/TestConventionDetectorPort';
 
 /**
- * Infrastructure service: walk a package root and decide which sibling-test
- * naming convention the project uses (`<base>.test.<ext>` vs `<base>.spec.<ext>`).
+ * `node:fs`-backed `TestConventionDetectorPort` implementation.
  *
- * Lives in `infrastructure/coverage/` because its job is filesystem
- * inspection — same shape as `FrameworkDetector` and `NodeVersionDetector`.
- * The decision *rule* (count-based, default to 'test' on tie/empty) is
- * trivial enough to live alongside the I/O without splitting domain/infra.
+ * Walks the package root and counts `.test` vs `.spec` filenames. The
+ * dominant suffix wins; default `'test'` on tie or empty (matches
+ * Jest's recommendation and the historical orchestrator behavior, so
+ * single-package repos that haven't picked a side keep working unchanged).
  *
- * Default: `'test'` when (a) no existing test files are found at all, or
- * (b) both suffixes appear at exactly the same count. Matches Jest's
- * "official" recommendation and the historical orchestrator behavior, so
- * single-package repos that haven't picked a side keep working unchanged.
- *
- * Skips: `node_modules`, dotfiles, `dist`, `build`, `coverage`. Caps walk
- * depth at 6 levels — deep enough for monorepo layouts (`apps/X/src/__tests__/...`)
- * without exploding on path-pathological cases.
+ * Skips: `node_modules`, dotfiles, `dist`, `build`, `coverage`, `.git`,
+ * `.next`, `.cache`. Caps walk depth at 6 levels — deep enough for
+ * monorepo layouts (`apps/X/src/__tests__/...`) without exploding on
+ * path-pathological cases.
  */
 const SKIP_DIRS = new Set([
   'node_modules',
@@ -32,8 +28,8 @@ const SKIP_DIRS = new Set([
 
 const MAX_DEPTH = 6;
 
-export class TestConventionDetector {
-  static async detect(packageRoot: string): Promise<TestConvention> {
+export class FsTestConventionDetector implements TestConventionDetectorPort {
+  async detect(packageRoot: string): Promise<TestConvention> {
     let testCount = 0;
     let specCount = 0;
 

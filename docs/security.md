@@ -194,8 +194,10 @@ the orchestrator address this:
 ### Mitigation 1: pre-AI agent-config scrubbing
 
 Before the AI invocation phase, `RunImprovementJob.runOneAttempt()`
-calls `AgentConfigScrubber.scrub(workdir)`
-(`backend/src/application/services/AgentConfigScrubber.ts`), which removes:
+calls the injected `AgentConfigScrubberPort.scrub(workdir)` adapter
+(domain port: `backend/src/domain/ports/AgentConfigScrubberPort.ts`;
+filesystem implementation: `backend/src/infrastructure/workdir/FsAgentConfigScrubber.ts`),
+which removes:
 
 - `CLAUDE.md`, `claude.md`, `CLAUDE.local.md`
 - `.claude/`, `.cursor/`, `.cursorrules`, `.continue/`

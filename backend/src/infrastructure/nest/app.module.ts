@@ -13,6 +13,9 @@ import { SimpleGitCloner } from '@infrastructure/git/SimpleGitCloner';
 import { DockerSandbox } from '@infrastructure/sandbox/DockerSandbox';
 import { NpmTestRunner } from '@infrastructure/coverage/NpmTestRunner';
 import { AstTestValidator } from '@infrastructure/validation/AstTestValidator';
+import { FsAgentConfigScrubber } from '@infrastructure/workdir/FsAgentConfigScrubber';
+import { FsSiblingTestPathFinder } from '@infrastructure/workdir/FsSiblingTestPathFinder';
+import { FsTestConventionDetector } from '@infrastructure/workdir/FsTestConventionDetector';
 import { selectAiAdapter, resolveAiEnv } from '@infrastructure/ai/aiAdapterRegistry';
 import { InMemoryPerRepoQueue } from '@infrastructure/queue/InMemoryPerRepoQueue';
 import { Semaphore } from '@infrastructure/concurrency/Semaphore';
@@ -131,6 +134,21 @@ const SQLITE_CONNECTION = 'SqliteConnection';
       provide: TOKENS.TestSuiteValidator,
       useFactory: () => new AstTestValidator(),
     },
+    // Workdir-bound port adapters — pure fs operations behind ports so
+    // the use cases stay free of `node:fs` knowledge and tests can swap
+    // in fakes that don't touch a real workdir.
+    {
+      provide: TOKENS.AgentConfigScrubber,
+      useFactory: () => new FsAgentConfigScrubber(),
+    },
+    {
+      provide: TOKENS.SiblingTestPathFinder,
+      useFactory: () => new FsSiblingTestPathFinder(),
+    },
+    {
+      provide: TOKENS.TestConventionDetector,
+      useFactory: () => new FsTestConventionDetector(),
+    },
     {
       provide: TOKENS.AICliPort,
       useFactory: (config: AppConfig, sandbox: SandboxPort): AICliPort => {
@@ -159,6 +177,9 @@ const SQLITE_CONNECTION = 'SqliteConnection';
         ai: ReturnType<typeof selectAiAdapter>,
         coverageRunner: NpmTestRunner,
         validator: AstTestValidator,
+        agentConfigScrubber: FsAgentConfigScrubber,
+        siblingTestPathFinder: FsSiblingTestPathFinder,
+        testConventionDetector: FsTestConventionDetector,
         config: AppConfig,
       ) =>
         new RunImprovementJob({
@@ -170,6 +191,9 @@ const SQLITE_CONNECTION = 'SqliteConnection';
           ai,
           coverageRunner,
           validator,
+          agentConfigScrubber,
+          siblingTestPathFinder,
+          testConventionDetector,
           jobWorkdirRoot: config.jobWorkdirRoot,
           githubToken: config.githubToken,
           resolveAiEnv: (required) =>
@@ -184,6 +208,9 @@ const SQLITE_CONNECTION = 'SqliteConnection';
         TOKENS.AICliPort,
         TOKENS.CoverageRunnerPort,
         TOKENS.TestSuiteValidator,
+        TOKENS.AgentConfigScrubber,
+        TOKENS.SiblingTestPathFinder,
+        TOKENS.TestConventionDetector,
         TOKENS.Config,
       ],
     },
@@ -230,6 +257,7 @@ const SQLITE_CONNECTION = 'SqliteConnection';
         reports: SqliteCoverageReportRepository,
         git: SimpleGitCloner,
         runner: NpmTestRunner,
+        siblingTestPathFinder: FsSiblingTestPathFinder,
         config: AppConfig,
       ) =>
         new AnalyzeRepositoryCoverage({
@@ -237,6 +265,7 @@ const SQLITE_CONNECTION = 'SqliteConnection';
           reports,
           git,
           coverageRunner: runner,
+          siblingTestPathFinder,
           jobWorkdirRoot: config.jobWorkdirRoot,
           githubToken: config.githubToken,
         }),
@@ -245,6 +274,7 @@ const SQLITE_CONNECTION = 'SqliteConnection';
         TOKENS.CoverageReportRepository,
         TOKENS.GitPort,
         TOKENS.CoverageRunnerPort,
+        TOKENS.SiblingTestPathFinder,
         TOKENS.Config,
       ],
     },

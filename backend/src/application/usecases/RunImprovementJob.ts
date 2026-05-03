@@ -1,8 +1,5 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { TestConventionDetector } from '../services/TestConventionDetector';
-import { SiblingTestPathFinder } from '../services/SiblingTestPathFinder';
-import { AgentConfigScrubber } from '../services/AgentConfigScrubber';
 import { SecretScanner } from '@domain/security/SecretScanner';
 import { CoverageReport } from '@domain/coverage/CoverageReport';
 import { ImprovementJob } from '@domain/job/ImprovementJob';
@@ -16,6 +13,9 @@ import { GitPort } from '@domain/ports/GitPort';
 import { AICliPort, SupportedTestFramework } from '@domain/ports/AICliPort';
 import { CoverageRunnerPort } from '@domain/ports/CoverageRunnerPort';
 import { TestSuiteValidatorPort } from '@domain/ports/TestSuiteValidatorPort';
+import { AgentConfigScrubberPort } from '@domain/ports/AgentConfigScrubberPort';
+import { SiblingTestPathFinderPort } from '@domain/ports/SiblingTestPathFinderPort';
+import { TestConventionDetectorPort } from '@domain/ports/TestConventionDetectorPort';
 import { JobExecutor } from './JobExecutor';
 
 export interface RunImprovementJobDeps {
@@ -27,6 +27,9 @@ export interface RunImprovementJobDeps {
   ai: AICliPort;
   coverageRunner: CoverageRunnerPort;
   validator: TestSuiteValidatorPort;
+  agentConfigScrubber: AgentConfigScrubberPort;
+  siblingTestPathFinder: SiblingTestPathFinderPort;
+  testConventionDetector: TestConventionDetectorPort;
   jobWorkdirRoot: string;
   githubToken: string;
   resolveAiEnv: (requiredEnv: readonly string[]) => Record<string, string>;
@@ -135,13 +138,13 @@ export class RunImprovementJob implements JobExecutor {
       const framework = detectFrameworkFromDeps(detectionInfo.allDeps);
       await log(`Detected framework: ${framework}`);
 
-      const existingTestPath = await SiblingTestPathFinder.findExisting(workdir, job.targetFilePath);
+      const existingTestPath = await this.deps.siblingTestPathFinder.findExisting(workdir, job.targetFilePath);
       const styleExample = pickStyleExample(workdir, job.targetFilePath, existingTestPath);
 
       // Detect whether the project uses *.test.* or *.spec.* as its sibling
       // naming convention. Drives the name of any new test file we ask the
       // AI to create — matches existing repo style instead of forcing `.test`.
-      const testConvention = await TestConventionDetector.detect(workdir);
+      const testConvention = await this.deps.testConventionDetector.detect(workdir);
       await log(`Project test naming convention: *.${testConvention}.ts`);
 
       // Fast-fail: parse the existing test file BEFORE spawning a sandbox.
@@ -332,7 +335,7 @@ export class RunImprovementJob implements JobExecutor {
     // a malicious target repo (or its postinstall) may have planted to inject
     // instructions into Claude Code. Logged but not failed: agent-config
     // scrubbing is defense in depth, not a hard requirement.
-    const scrubbed = await AgentConfigScrubber.scrub(params.workdir);
+    const scrubbed = await this.deps.agentConfigScrubber.scrub(params.workdir);
     if (scrubbed.length > 0) {
       await params.log(`[security] scrubbed agent-config paths before AI invoke: ${scrubbed.join(', ')}`);
     }
