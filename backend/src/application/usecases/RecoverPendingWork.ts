@@ -1,8 +1,8 @@
-import { Logger } from '@nestjs/common';
 import { JobRepository } from '@domain/ports/JobRepository';
 import { RepositoryRepository } from '@domain/ports/RepositoryRepository';
 import { JobScheduler } from '@domain/services/JobScheduler';
 import { RepositoryAnalysisScheduler } from '@domain/services/RepositoryAnalysisScheduler';
+import { Logger } from '@domain/ports/LoggerPort';
 import { AnalyzeRepositoryCoverage } from './AnalyzeRepositoryCoverage';
 
 export interface RecoverPendingWorkResult {
@@ -29,14 +29,13 @@ export interface RecoverPendingWorkResult {
  * practice it's only called once per process lifetime.
  */
 export class RecoverPendingWork {
-  private readonly logger = new Logger('RecoverPendingWork');
-
   constructor(
     private readonly jobs: JobRepository,
     private readonly repos: RepositoryRepository,
     private readonly scheduler: JobScheduler,
     private readonly analysisScheduler: RepositoryAnalysisScheduler,
     private readonly analyze: AnalyzeRepositoryCoverage,
+    private readonly logger: Logger,
   ) {}
 
   async execute(): Promise<RecoverPendingWorkResult> {

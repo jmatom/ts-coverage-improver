@@ -1,4 +1,3 @@
-import { Logger } from '@nestjs/common';
 import { join } from 'node:path';
 import { CoverageReport } from '@domain/coverage/CoverageReport';
 import { Repository } from '@domain/repository/Repository';
@@ -8,6 +7,7 @@ import { CoverageReportRepository } from '@domain/ports/CoverageReportRepository
 import { GitPort } from '@domain/ports/GitPort';
 import { CoverageRunnerPort } from '@domain/ports/CoverageRunnerPort';
 import { SiblingTestPathFinderPort } from '@domain/ports/SiblingTestPathFinderPort';
+import { Logger } from '@domain/ports/LoggerPort';
 
 export interface AnalyzeRepositoryCoverageDeps {
   repos: RepositoryRepository;
@@ -15,6 +15,7 @@ export interface AnalyzeRepositoryCoverageDeps {
   git: GitPort;
   coverageRunner: CoverageRunnerPort;
   siblingTestPathFinder: SiblingTestPathFinderPort;
+  logger: Logger;
   /** Where to clone repos for analysis. Each call gets a unique sub-dir. */
   jobWorkdirRoot: string;
   /** PAT for cloning private repos and authenticating. */
@@ -43,7 +44,6 @@ export interface AnalyzeRepositoryCoverageDeps {
  * that want to bypass the queue.
  */
 export class AnalyzeRepositoryCoverage {
-  private readonly logger = new Logger('AnalyzeRepositoryCoverage');
   constructor(private readonly deps: AnalyzeRepositoryCoverageDeps) {}
 
   async execute(input: { repositoryId: RepositoryId }): Promise<{ commitSha: string; fileCount: number }> {
@@ -96,7 +96,7 @@ export class AnalyzeRepositoryCoverage {
     // per-row log channel today; this at least makes the decisions visible
     // via `docker compose logs backend`.
     for (const line of result.logs.split('\n').filter((l) => l.trim() !== '')) {
-      this.logger.log(`[${repo.fullName}] ${line}`);
+      this.deps.logger.log(`[${repo.fullName}] ${line}`);
     }
 
     // Enrich each FileCoverage with `hasExistingTest`. The lcov payload alone

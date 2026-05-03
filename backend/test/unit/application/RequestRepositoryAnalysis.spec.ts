@@ -2,11 +2,19 @@ import { Repository } from '../../../src/domain/repository/Repository';
 import { RepositoryId } from '../../../src/domain/repository/RepositoryId';
 import { RepositoryRepository } from '../../../src/domain/ports/RepositoryRepository';
 import { RepositoryAnalysisScheduler } from '../../../src/domain/services/RepositoryAnalysisScheduler';
+import { Logger } from '../../../src/domain/ports/LoggerPort';
 import {
   RepositoryNotFoundError,
 } from '../../../src/domain/errors/DomainError';
 import { RequestRepositoryAnalysis } from '../../../src/application/usecases/RequestRepositoryAnalysis';
 import { AnalyzeRepositoryCoverage } from '../../../src/application/usecases/AnalyzeRepositoryCoverage';
+
+const noopLogger: Logger = {
+  log: () => {},
+  warn: () => {},
+  error: () => {},
+  debug: () => {},
+};
 
 class FakeRepos implements RepositoryRepository {
   saved: Repository[] = [];
@@ -51,7 +59,7 @@ describe('RequestRepositoryAnalysis', () => {
     const repos = new FakeRepos(repo);
     const scheduler = new FakeScheduler();
     const analyze = new FakeAnalyze() as unknown as AnalyzeRepositoryCoverage;
-    const useCase = new RequestRepositoryAnalysis(repos, scheduler, analyze);
+    const useCase = new RequestRepositoryAnalysis(repos, scheduler, analyze, noopLogger);
 
     const dto = await useCase.execute({ repositoryId: repo.id });
 
@@ -73,7 +81,7 @@ describe('RequestRepositoryAnalysis', () => {
     const repos = new FakeRepos(null);
     const scheduler = new FakeScheduler();
     const analyze = new FakeAnalyze() as unknown as AnalyzeRepositoryCoverage;
-    const useCase = new RequestRepositoryAnalysis(repos, scheduler, analyze);
+    const useCase = new RequestRepositoryAnalysis(repos, scheduler, analyze, noopLogger);
 
     await expect(useCase.execute({ repositoryId: RepositoryId.new() })).rejects.toBeInstanceOf(
       RepositoryNotFoundError,
@@ -87,7 +95,7 @@ describe('RequestRepositoryAnalysis', () => {
     const scheduler = new FakeScheduler();
     const fake = new FakeAnalyze();
     const analyze = fake as unknown as AnalyzeRepositoryCoverage;
-    const useCase = new RequestRepositoryAnalysis(repos, scheduler, analyze);
+    const useCase = new RequestRepositoryAnalysis(repos, scheduler, analyze, noopLogger);
 
     await useCase.execute({ repositoryId: repo.id });
 
@@ -103,7 +111,7 @@ describe('RequestRepositoryAnalysis', () => {
     const fake = new FakeAnalyze();
     fake.result = Promise.reject(new Error('install failed'));
     const analyze = fake as unknown as AnalyzeRepositoryCoverage;
-    const useCase = new RequestRepositoryAnalysis(repos, scheduler, analyze);
+    const useCase = new RequestRepositoryAnalysis(repos, scheduler, analyze, noopLogger);
 
     await useCase.execute({ repositoryId: repo.id });
     // The scheduler-fired callback must not bubble exceptions — the analyze
@@ -118,7 +126,7 @@ describe('RequestRepositoryAnalysis', () => {
       const repos = new FakeRepos(repo);
       const scheduler = new FakeScheduler();
       const analyze = new FakeAnalyze() as unknown as AnalyzeRepositoryCoverage;
-      const useCase = new RequestRepositoryAnalysis(repos, scheduler, analyze);
+      const useCase = new RequestRepositoryAnalysis(repos, scheduler, analyze, noopLogger);
 
       const dto = await useCase.execute({ repositoryId: repo.id });
       expect(dto.analysisStatus).toBe('pending');
@@ -135,7 +143,7 @@ describe('RequestRepositoryAnalysis', () => {
       const repos = new FakeRepos(repo);
       const scheduler = new FakeScheduler();
       const analyze = new FakeAnalyze() as unknown as AnalyzeRepositoryCoverage;
-      const useCase = new RequestRepositoryAnalysis(repos, scheduler, analyze);
+      const useCase = new RequestRepositoryAnalysis(repos, scheduler, analyze, noopLogger);
 
       const dto = await useCase.execute({ repositoryId: repo.id });
       expect(dto.analysisStatus).toBe('running');
@@ -150,6 +158,7 @@ describe('RequestRepositoryAnalysis', () => {
         repos,
         new FakeScheduler(),
         new FakeAnalyze() as unknown as AnalyzeRepositoryCoverage,
+        noopLogger,
       );
       const dto = await useCase.execute({ repositoryId: repo.id });
       expect(dto.analysisStatus).toBe('pending');
@@ -165,6 +174,7 @@ describe('RequestRepositoryAnalysis', () => {
         repos,
         new FakeScheduler(),
         new FakeAnalyze() as unknown as AnalyzeRepositoryCoverage,
+        noopLogger,
       );
 
       const dto = await useCase.execute({ repositoryId: repo.id });

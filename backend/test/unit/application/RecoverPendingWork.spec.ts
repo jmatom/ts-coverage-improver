@@ -6,8 +6,16 @@ import { JobRepository } from '../../../src/domain/ports/JobRepository';
 import { RepositoryRepository } from '../../../src/domain/ports/RepositoryRepository';
 import { JobScheduler } from '../../../src/domain/services/JobScheduler';
 import { RepositoryAnalysisScheduler } from '../../../src/domain/services/RepositoryAnalysisScheduler';
+import { Logger } from '../../../src/domain/ports/LoggerPort';
 import { RecoverPendingWork } from '../../../src/application/usecases/RecoverPendingWork';
 import { AnalyzeRepositoryCoverage } from '../../../src/application/usecases/AnalyzeRepositoryCoverage';
+
+const noopLogger: Logger = {
+  log: () => {},
+  warn: () => {},
+  error: () => {},
+  debug: () => {},
+};
 
 class FakeJobs implements JobRepository {
   pending: ImprovementJob[] = [];
@@ -83,6 +91,7 @@ describe('RecoverPendingWork', () => {
       new FakeJobScheduler(),
       new FakeAnalysisScheduler(),
       new FakeAnalyze() as unknown as AnalyzeRepositoryCoverage,
+      noopLogger,
     );
     expect(await useCase.execute()).toEqual({ recoveredJobs: 0, recoveredAnalyses: 0 });
   });
@@ -103,6 +112,7 @@ describe('RecoverPendingWork', () => {
       scheduler,
       new FakeAnalysisScheduler(),
       new FakeAnalyze() as unknown as AnalyzeRepositoryCoverage,
+      noopLogger,
     );
 
     const result = await useCase.execute();
@@ -127,6 +137,7 @@ describe('RecoverPendingWork', () => {
       new FakeJobScheduler(),
       analysisScheduler,
       fakeAnalyze as unknown as AnalyzeRepositoryCoverage,
+      noopLogger,
     );
 
     const result = await useCase.execute();
@@ -154,6 +165,7 @@ describe('RecoverPendingWork', () => {
       new FakeJobScheduler(),
       analysisScheduler,
       fakeAnalyze as unknown as AnalyzeRepositoryCoverage,
+      noopLogger,
     );
 
     await useCase.execute();
@@ -178,6 +190,7 @@ describe('RecoverPendingWork', () => {
       jobSched,
       analysisSched,
       new FakeAnalyze() as unknown as AnalyzeRepositoryCoverage,
+      noopLogger,
     );
 
     const result = await useCase.execute();
