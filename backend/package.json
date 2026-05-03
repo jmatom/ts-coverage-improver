@@ -4,6 +4,9 @@
   "private": true,
   "description": "TS Coverage Improver — NestJS backend (DDD)",
   "license": "UNLICENSED",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "build": "nest build",
     "start": "node --no-warnings=ExperimentalWarning dist/main.js",
