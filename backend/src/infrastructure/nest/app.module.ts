@@ -38,8 +38,6 @@ import { RepositoriesController } from './RepositoriesController';
 import { JobsController } from './JobsController';
 import { ConfigController } from './ConfigController';
 
-const SQLITE_CONNECTION = 'SqliteConnection';
-
 @Module({
   controllers: [RepositoriesController, JobsController, ConfigController],
   providers: [
@@ -48,7 +46,7 @@ const SQLITE_CONNECTION = 'SqliteConnection';
       useFactory: () => loadAppConfig(),
     },
     {
-      provide: SQLITE_CONNECTION,
+      provide: TOKENS.SqliteConnection,
       useFactory: (config: AppConfig) => {
         const conn = new SqliteConnection(config.databasePath);
         const applied = conn.applyMigrations(join(__dirname, '../../../migrations'));
@@ -87,17 +85,17 @@ const SQLITE_CONNECTION = 'SqliteConnection';
     {
       provide: TOKENS.RepositoryRepository,
       useFactory: (c: SqliteConnection) => new SqliteRepositoryRepository(c.db),
-      inject: [SQLITE_CONNECTION],
+      inject: [TOKENS.SqliteConnection],
     },
     {
       provide: TOKENS.CoverageReportRepository,
       useFactory: (c: SqliteConnection) => new SqliteCoverageReportRepository(c.db),
-      inject: [SQLITE_CONNECTION],
+      inject: [TOKENS.SqliteConnection],
     },
     {
       provide: TOKENS.JobRepository,
       useFactory: (c: SqliteConnection) => new SqliteJobRepository(c.db),
-      inject: [SQLITE_CONNECTION],
+      inject: [TOKENS.SqliteConnection],
     },
 
     // Outbound adapters

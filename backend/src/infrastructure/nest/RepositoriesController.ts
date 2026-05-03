@@ -37,8 +37,18 @@ export class RepositoriesController {
     @Inject(TOKENS.Config) private readonly config: AppConfig,
   ) {}
 
+  // Success: 202 (idempotent register). Failures: 400 INVALID_GITHUB_URL,
+  // 422 FORKING_DISABLED, 502 UPSTREAM_UNREACHABLE.
   @Post()
+  @HttpCode(202)
   async create(@Body() body: RegisterRepositoryRequestDto) {
+    // 202: registration is idempotent on (owner, name) — submitting the same
+    // URL twice is a no-op-success rather than a 409. The persisted row is
+    // returned in `analysisStatus: "idle"`; the dashboard prompts the user
+    // to click Re-analyze to populate coverage data. Choosing 202 over 201
+    // keeps the controller's async-vs-sync convention consistent: every
+    // mutating endpoint here returns 202 because none of them have produced
+    // a final user-visible artifact by the time the response is sent.
     return this.register.execute({ url: body.url, subpath: body.subpath });
   }
 
@@ -60,6 +70,9 @@ export class RepositoriesController {
     });
   }
 
+  // Success: 202 (always — pending/running maps to "already in flight"
+  // returned as 202 too). Failures: 400 INVALID_REPOSITORY_ID,
+  // 404 REPOSITORY_NOT_FOUND.
   @Post(':id/refresh')
   @HttpCode(202)
   async refresh(@Param('id') id: string) {
@@ -72,19 +85,31 @@ export class RepositoriesController {
     return this.requestAnalysis.execute({ repositoryId: repoId });
   }
 
+  // Success: 202 (job persisted in pending + enqueued).
+  // Failures: 400 INVALID_REPOSITORY_ID, 404 REPOSITORY_NOT_FOUND,
+  // 409 JOB_ALREADY_IN_FLIGHT, 422 NO_COVERAGE_REPORT |
+  // FILE_NOT_IN_REPORT | FILE_ALREADY_AT_100_PERCENT,
+  // 503 QUEUE_DEPTH_EXCEEDED.
   @Post(':id/jobs')
+  @HttpCode(202)
   async createJob(
     @Param('id') id: string,
     @Body() body: RequestImprovementJobRequestDto,
   ) {
     const repoId = RepositoryId.of(id);
     await this.assertRepoExists(repoId);
+    // Returns 202: the job is persisted in `pending` and enqueued onto
+    // the per-repo queue. The actual clone + AI invoke + tests + PR push
+    // runs in the background; the dashboard observes via GET /jobs/:id.
+    // Same async-honest pattern as /refresh.
     return this.requestJob.execute({
       repositoryId: repoId,
       targetFilePath: body.filePath,
     });
   }
 
+  // Success: 204 (no body). Failures: 400 INVALID_REPOSITORY_ID,
+  // 404 REPOSITORY_NOT_FOUND.
   @Delete(':id')
   @HttpCode(204)
   async remove(@Param('id') id: string): Promise<void> {

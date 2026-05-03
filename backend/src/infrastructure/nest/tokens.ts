@@ -19,5 +19,6 @@ export const TOKENS = {
   JobScheduler: 'JobScheduler',
   JobExecutor: 'JobExecutor',
   RepositoryAnalysisScheduler: 'RepositoryAnalysisScheduler',
-  Config: 'AppConfig',
+  Config: 'Config',
+  SqliteConnection: 'SqliteConnection',
 } as const;

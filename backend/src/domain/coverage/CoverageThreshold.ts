@@ -1,4 +1,4 @@
-import { DomainInvariantError } from '../errors/DomainError';
+import { InvalidCoverageThresholdError } from '../errors/DomainError';
 
 /**
  * Value object: a coverage threshold percentage in the closed range [0, 100].
@@ -23,9 +23,7 @@ export class CoverageThreshold {
 
   static of(value: number): CoverageThreshold {
     if (!Number.isFinite(value) || value < 0 || value > 100) {
-      throw new DomainInvariantError(
-        `CoverageThreshold must be a finite number in [0, 100]; got ${value}`,
-      );
+      throw new InvalidCoverageThresholdError(value);
     }
     return new CoverageThreshold(value);
   }

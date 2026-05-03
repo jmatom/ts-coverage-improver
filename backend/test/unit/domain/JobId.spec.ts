@@ -1,5 +1,5 @@
 import { JobId } from '../../../src/domain/job/JobId';
-import { DomainInvariantError } from '../../../src/domain/errors/DomainError';
+import { InvalidJobIdError } from '../../../src/domain/errors/DomainError';
 
 describe('JobId', () => {
   describe('new', () => {
@@ -18,11 +18,11 @@ describe('JobId', () => {
     });
 
     it('rejects a non-UUID string', () => {
-      expect(() => JobId.of('job-42')).toThrow(DomainInvariantError);
+      expect(() => JobId.of('job-42')).toThrow(InvalidJobIdError);
     });
 
     it('rejects non-string input', () => {
-      expect(() => JobId.of(null as unknown as string)).toThrow(DomainInvariantError);
+      expect(() => JobId.of(null as unknown as string)).toThrow(InvalidJobIdError);
     });
   });
 
