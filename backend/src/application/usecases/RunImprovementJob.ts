@@ -370,7 +370,7 @@ export class RunImprovementJob implements JobExecutor {
     }
 
     // Normalize: strip a leading `<subpath>/` from each written path so all
-    // paths are package-root-relative. ClaudeCodeAdapter's `diffWrittenFiles`
+    // paths are package-root-relative. ClaudeAICli's `diffWrittenFiles`
     // resolves git paths against the repo root (cloneRoot), so for monorepos
     // we get back e.g. 'backend/src/foo.test.ts' even though the AI sees
     // /workspace = packageRoot.

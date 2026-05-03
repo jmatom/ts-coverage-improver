@@ -23,7 +23,7 @@ import { buildTestGenerationPrompt } from './prompt';
  * `RunImprovementJob` after this method returns. The adapter's only job is
  * "hand the prompt to the CLI and report back which files were written."
  */
-export class ClaudeCodeAdapter implements AICliPort {
+export class ClaudeAICli implements AICliPort {
   readonly id = 'claude';
   readonly requiredEnv = ['ANTHROPIC_API_KEY'] as const;
   readonly optionalEnv = ['ANTHROPIC_BASE_URL'] as const;

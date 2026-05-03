@@ -98,9 +98,9 @@ How the two semaphores stack:
 - Each `sandbox.run()` call (install, test, or AI) acquires a
   **sandbox** slot for its duration and releases it on exit. Slots are
   held per-call, not per-job — between the install-call and the
-  test-call inside `NpmTestRunner.run()`, the slot is briefly free.
+  test-call inside `NpmCoverageRunner.run()`, the slot is briefly free.
 - AI invocations additionally acquire an **AI** slot. The path is
-  `SemaphoreAiAdapter.generateTest` (acquires AI) → `ClaudeCodeAdapter.
+  `SemaphoreAiAdapter.generateTest` (acquires AI) → `ClaudeAICli.
   generateTest` → `this.sandbox.run(...)` → `SemaphoreSandbox.run`
   (acquires sandbox). So an AI call holds **both** slots for its full
   duration. That is the intended behavior: the AI call is itself a
@@ -169,7 +169,7 @@ actually goes during a typical job:
 | Octokit calls | backend, network I/O | No |
 | Dockerode RPC over the socket | backend, network I/O | No |
 | `LcovParser.parse(...)` | backend, in-process | Yes, but typically <5 ms |
-| `AstTestValidator` (TS compiler API) | backend, in-process | Yes, ~10–50 ms per test file |
+| `AstTestSuiteValidator` (TS compiler API) | backend, in-process | Yes, ~10–50 ms per test file |
 | `node:sqlite` reads/writes | backend, sync | Yes, sub-millisecond per call |
 | `existsSync`, `readFileSync` | backend, sync | Yes, sub-millisecond |
 
@@ -188,7 +188,7 @@ The cheaper first wins, taken in this same change set:
    warranted.
 
 If the event-loop monitor starts firing under realistic load, the right
-follow-up is to extract just `AstTestValidator` and `LcovParser` (both
+follow-up is to extract just `AstTestSuiteValidator` and `LcovParser` (both
 pure functions) onto a small worker pool. The architecture is friendly
 to that retrofit because both functions are testable in isolation.
 

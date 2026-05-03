@@ -16,7 +16,7 @@ import {
  * practice (returns the existing fork), but we prefer an explicit lookup so
  * we don't silently churn the API.
  */
-export class OctokitGitHubAdapter implements GitHubPort {
+export class OctokitGitHub implements GitHubPort {
   private readonly octokit: Octokit;
   private cachedAuthLogin: string | null = null;
 

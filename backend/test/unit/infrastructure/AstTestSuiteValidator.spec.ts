@@ -1,4 +1,4 @@
-import { AstTestValidator } from '../../../src/infrastructure/validation/AstTestValidator';
+import { AstTestSuiteValidator } from '../../../src/infrastructure/validation/AstTestSuiteValidator';
 
 const before = `
 describe('Sum', () => {
@@ -8,9 +8,9 @@ describe('Sum', () => {
 });
 `.trim();
 
-const validator = new AstTestValidator();
+const validator = new AstTestSuiteValidator();
 
-describe('AstTestValidator', () => {
+describe('AstTestSuiteValidator', () => {
   describe('validateAppend', () => {
     it('accepts a valid append (existing block kept, new block added)', () => {
       const after = `

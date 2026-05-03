@@ -304,7 +304,7 @@ Backend's per-repo queue worker (background promise, not request-bound)
        └─ host: simple-git clone
        └─ dockerode.createContainer → container #1 → install+test (baseline)
        └─ dockerode.createContainer → container #2 → AI invocation
-       └─ AstTestValidator (in-process)
+       └─ AstTestSuiteValidator (in-process)
        └─ dockerode.createContainer → container #3 → re-test (validation)
        └─ Octokit: ensureFork + pushBranch + openPullRequest
        └─ SQLite: job.markSucceeded(prUrl, before, after)

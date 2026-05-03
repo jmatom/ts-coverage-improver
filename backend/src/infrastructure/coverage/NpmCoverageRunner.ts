@@ -17,7 +17,7 @@ import { describeNodeVersion, detectNodeVersion } from './NodeVersionDetector';
  * The runner trusts the SandboxPort to enforce isolation — we just hand
  * over commands and read back the artifact from disk.
  */
-export class NpmTestRunner implements CoverageRunnerPort {
+export class NpmCoverageRunner implements CoverageRunnerPort {
   constructor(private readonly sandbox: SandboxPort) {}
 
   async run(input: CoverageRunInput): Promise<CoverageRunResult> {

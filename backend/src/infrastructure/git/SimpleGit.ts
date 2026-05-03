@@ -1,4 +1,4 @@
-import { simpleGit, SimpleGit } from 'simple-git';
+import { simpleGit, SimpleGit as SimpleGitClient } from 'simple-git';
 import { mkdirSync, rmSync, existsSync } from 'node:fs';
 import { CloneInput, CommitAndPushInput, GitPort } from '@domain/ports/GitPort';
 
@@ -12,7 +12,7 @@ import { CloneInput, CommitAndPushInput, GitPort } from '@domain/ports/GitPort';
  *  - workdir is wiped and recreated on clone to guarantee a clean checkout
  *    between attempts (jobs are disposable).
  */
-export class SimpleGitCloner implements GitPort {
+export class SimpleGit implements GitPort {
   async clone(input: CloneInput): Promise<{ commitSha: string }> {
     if (existsSync(input.workdir)) {
       rmSync(input.workdir, { recursive: true, force: true });
@@ -30,7 +30,7 @@ export class SimpleGitCloner implements GitPort {
   }
 
   async commitAndPush(input: CommitAndPushInput): Promise<void> {
-    const git: SimpleGit = simpleGit({ baseDir: input.workdir });
+    const git: SimpleGitClient = simpleGit({ baseDir: input.workdir });
     await git
       .addConfig('user.email', input.authorEmail ?? 'coverage-improver-bot@users.noreply.github.com')
       .addConfig('user.name', input.authorName ?? 'Coverage Improver Bot');

@@ -1,6 +1,6 @@
 import { AICliPort } from '@domain/ports/AICliPort';
 import { SandboxPort } from '@domain/ports/SandboxPort';
-import { ClaudeCodeAdapter } from './ClaudeCodeAdapter';
+import { ClaudeAICli } from './ClaudeAICli';
 
 /**
  * Adapter registry for the "via any AI CLI" seam.
@@ -13,7 +13,7 @@ import { ClaudeCodeAdapter } from './ClaudeCodeAdapter';
  * fails fast if the operator forgot to set credentials.
  */
 const REGISTRY: Record<string, (sandbox: SandboxPort) => AICliPort> = {
-  claude: (s) => new ClaudeCodeAdapter(s),
+  claude: (s) => new ClaudeAICli(s),
   // To enable Gemini in production:
   //   1. Rename GeminiCliAdapter.example.ts → GeminiCliAdapter.ts
   //   2. Add `gemini: (s) => new GeminiCliAdapter(s),` here

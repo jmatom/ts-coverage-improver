@@ -83,7 +83,7 @@ A few minutes of demo costs roughly $0.10 in Anthropic credits.
 - **Frontend.** Vite + React + Tailwind + custom shadcn-style
   components (Radix primitives for Dialog/Tooltip/DropdownMenu).
 - **AI seam.** Behind an `AICliPort` interface; one adapter shipped
-  (`ClaudeCodeAdapter`), one example sketched
+  (`ClaudeAICli`), one example sketched
   (`GeminiCliAdapter.example.ts`). Adding a new CLI is a single new
   file plus a registry entry.
 

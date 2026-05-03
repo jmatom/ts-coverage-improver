@@ -66,11 +66,11 @@ Interfaces in `backend/src/domain/ports/` that infra adapters implement. Applica
 
 | Port | Implementation | Purpose |
 | --- | --- | --- |
-| `GitHubPort` | `OctokitGitHubAdapter` | Fork (idempotent), open PR, repo metadata |
-| `GitPort` | `SimpleGitCloner` | Host-side clone + commit-and-push |
+| `GitHubPort` | `OctokitGitHub` | Fork (idempotent), open PR, repo metadata |
+| `GitPort` | `SimpleGit` | Host-side clone + commit-and-push |
 | `SandboxPort` | `DockerSandbox` | Run a command inside an isolated container with workdir mounted |
-| `AICliPort` | `ClaudeCodeAdapter` | Generate test code; the "via any AI CLI" seam |
-| `CoverageRunnerPort` | `NpmTestRunner` | Detect framework + run install + tests + parse lcov |
+| `AICliPort` | `ClaudeAICli` | Generate test code; the "via any AI CLI" seam |
+| `CoverageRunnerPort` | `NpmCoverageRunner` | Detect framework + run install + tests + parse lcov |
 | `RepositoryRepository` | `SqliteRepositoryRepository` | Persist `Repository` aggregates |
 | `CoverageReportRepository` | `SqliteCoverageReportRepository` | Persist `CoverageReport` aggregates |
 | `JobRepository` | `SqliteJobRepository` | Persist `ImprovementJob` aggregates + per-job logs |
@@ -90,7 +90,7 @@ Application-layer orchestrations. Each is a single class in `backend/src/applica
 ## Cross-cutting
 
 ### AST validation
-*`backend/src/infrastructure/validation/AstTestValidator.ts`*
+*`backend/src/infrastructure/validation/AstTestSuiteValidator.ts`*
 
 Safety net for append-mode AI edits. Pre-AI: snapshot every `describe`/`it`/`test` (and skip/only/each variants) with its description string. Post-AI: re-parse and assert (a) every pre-existing description still present, (b) at least one new block added, (c) file still parses. Sibling-mode validation is a subset (no diff baseline, just "parses + has tests").
 
