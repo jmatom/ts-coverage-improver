@@ -65,6 +65,49 @@ NestJS, Octokit, dockerode, simple-git, the TS compiler API, and
 `node:sqlite`. Cross-layer calls go through ports (interfaces in
 `domain/ports/`).
 
+## Register-repository sequence
+
+Adding a new GitHub repo to the dashboard. This is the simplest of the
+three flows — no per-repo queue, no sandbox container, no AI call. The
+HTTP request is fully synchronous: by the time the response returns,
+the row is in SQLite. Registration deliberately does NOT trigger an
+analysis — the user clicks Re-analyze separately, which keeps add-repo
+latency predictable and avoids surprise sandbox spawns.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant Browser as Browser<br/>(React)
+    participant Backend as Backend<br/>(NestJS)
+    participant GitHub
+
+    User->>Browser: Paste URL + (optional) subpath, click Add
+    Browser->>Backend: POST /api/repositories<br/>body = { url, subpath? }
+    Backend->>Backend: ValidationPipe rejects malformed body (400)
+    Backend->>Backend: Repository.parseUrl(url)<br/>extract owner + name (throws INVALID_GITHUB_URL → 400)
+    Backend->>Backend: findByOwnerAndName(owner, name)
+    alt Repo already registered
+        Backend-->>Browser: 202 cached summary (idempotent — same row)
+    else New repo
+        Backend->>GitHub: getRepositoryMeta(owner, name)<br/>(Octokit, host-side, PAT)
+        GitHub-->>Backend: { defaultBranch, forkingAllowed }
+        Backend->>Backend: if not forkingAllowed → throw FORKING_DISABLED (422)
+        Backend->>Backend: Repository.create(...)<br/>analysisStatus = idle, no coverage yet
+        Backend->>Backend: repos.save(repo) — INSERT into SQLite
+        Backend-->>Browser: 202 { id, owner, name, analysisStatus: "idle", ... }
+    end
+    User->>Browser: New row visible — click Re-analyze to populate coverage
+```
+
+A few callouts on the register sequence:
+
+- **Synchronous, no background work**. Unlike Re-analyze and Improve, no per-repo queue is involved. The Octokit metadata fetch is the only network call and runs on the request thread.
+- **Idempotent on (owner, name)**. Submitting the same URL twice returns the existing row — that's why the success status is 202 (request acknowledged, no new resource created on the duplicate path) rather than 201.
+- **Fork-and-PR feasibility checked at registration**. If GitHub reports `forkingAllowed = false` (some private orgs disable forking), the request fails fast with 422. Better to surface this on add-repo than later when the user clicks Improve and the job fails mid-flight.
+- **Subpath is captured at registration, not analysis**. Monorepo users supply the package subpath here so every later analyze + improve scopes to it without re-asking. The `Subpath` VO enforces the path-traversal guard.
+- **No GitHub write yet**. Registration only reads from GitHub. The first write (fork + branch push + PR open) happens during Improve, not here.
+
 ## Analyze-flow sequence
 
 A single Re-analyze request from click to coverage table populated.
@@ -211,5 +254,5 @@ A few callouts on the sequence:
 
 - [`architecture.mmd`](./architecture.mmd) — the system flowchart
   above, in a standalone `.mmd` file for `mermaid-cli` rendering.
-- The two sequence diagram sources are the ` ```mermaid sequenceDiagram ` blocks above
-  (analyze flow, then improvement-job flow).
+- The three sequence diagram sources are the ` ```mermaid sequenceDiagram ` blocks above
+  (register flow, then analyze flow, then improvement-job flow).
