@@ -65,7 +65,74 @@ NestJS, Octokit, dockerode, simple-git, the TS compiler API, and
 `node:sqlite`. Cross-layer calls go through ports (interfaces in
 `domain/ports/`).
 
-## Request-flow sequence
+## Analyze-flow sequence
+
+A single Re-analyze request from click to coverage table populated.
+Same three concurrency layers as the Improve flow below: HTTP
+request/response (sub-second), the per-repo queue (background promise
+chain that runs the clone + install + tests), and a per-analyze
+sandbox container.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant Browser as Browser<br/>(React)
+    participant Backend as Backend<br/>(NestJS)
+    participant GitHub
+    participant Sandbox as Sandbox<br/>(Docker container)
+
+    User->>Browser: Click "Re-analyze"
+    Browser->>Backend: POST /api/repositories/:id/refresh
+    Backend->>Backend: validate (repo exists)
+    Backend->>Backend: idempotency check (already pending/running? → return current state)
+    Backend->>Backend: mark repo pending, persist, enqueue on per-repo queue
+    Backend-->>Browser: 202 { analysisStatus: "pending", ... }
+    Note over Browser: Polls /api/repositories every 3s
+
+    Note over Backend: --- background promise chain ---
+    Backend->>Backend: mark repo running, persist
+
+    Backend->>GitHub: clone default branch (host-side simple-git, PAT in URL)
+    GitHub-->>Backend: source files into per-analyze workdir<br/>(scoped to repo.subpath if set)
+
+    Backend->>Sandbox: spawn — detect framework (jest/vitest/mocha+c8/nyc),<br/>npm install, run tests with coverage
+    Sandbox-->>Backend: coverage/lcov.info
+
+    Backend->>Backend: LcovParser.parse(lcov.info) → FileCoverage[]
+    Backend->>Backend: per-file sibling-test probe<br/>(enrich hasExistingTest, parallel via Promise.all)
+    Backend->>Backend: CoverageReport.create + persist (per-commit-SHA row)
+    Backend->>Backend: mark repo idle, set lastAnalyzedAt
+
+    Browser->>Backend: GET /api/repositories (next poll)
+    Backend-->>Browser: { analysisStatus: "idle", overallLinesPct, fileCount }
+    User->>Browser: Click into repo → coverage table renders
+```
+
+A few callouts on the analyze sequence:
+
+- The HTTP response (step 6) returns *before* the clone starts. Same
+  pattern as the Improve flow — clone + install + tests can take
+  minutes for a real-world repo, and the dashboard observes the
+  transitions via polling rather than a long-held connection.
+- The per-repo queue serializes analysis against any improvement jobs
+  for the same repo (both contend for the cloned workdir). Different
+  repos run concurrently.
+- Repository registration (`POST /api/repositories`) doesn't run
+  analysis automatically; the user clicks Re-analyze when ready. This
+  keeps registration latency predictable and avoids surprise sandbox
+  spawns.
+- On any thrown exception during the background chain, the repo
+  transitions to `analysisStatus: "failed"` with the error message
+  surfaced via `analysisError`. The boot reconciler resurrects rows
+  stuck in `running` after a backend crash (one auto-retry, then
+  hard-fail — see [`concurrency-and-backpressure.md`](./concurrency-and-backpressure.md)).
+- `CoverageReport` rows are immutable and keyed by `(repositoryId, commitSha)` —
+  re-analyzing the same commit produces a new row rather than mutating
+  the previous one. The dashboard always reads the latest by
+  `generated_at`.
+
+## Improvement-job sequence
 
 A single Improve job from click to merged PR. Three concurrency
 layers are visible: HTTP request/response (sub-second), the
@@ -143,4 +210,5 @@ A few callouts on the sequence:
 
 - [`architecture.mmd`](./architecture.mmd) — the system flowchart
   above, in a standalone `.mmd` file for `mermaid-cli` rendering.
-- The sequence diagram source is the ` ```mermaid sequenceDiagram ` block above.
+- The two sequence diagram sources are the ` ```mermaid sequenceDiagram ` blocks above
+  (analyze flow, then improvement-job flow).
