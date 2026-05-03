@@ -1,4 +1,5 @@
 import { DomainInvariantError } from '../errors/DomainError';
+import { CoveragePercentage } from './CoveragePercentage';
 export interface FileCoverageProps {
   path: string;
   linesPct: number;
@@ -26,9 +27,12 @@ export class FileCoverage {
 
   static create(props: Omit<FileCoverageProps, 'hasExistingTest'> & { hasExistingTest?: boolean | null }): FileCoverage {
     if (!props.path.trim()) throw new DomainInvariantError('FileCoverage.path must be non-empty');
-    FileCoverage.assertPct('linesPct', props.linesPct);
-    FileCoverage.assertPctOrNull('branchesPct', props.branchesPct);
-    FileCoverage.assertPctOrNull('functionsPct', props.functionsPct);
+    // Construct the VOs purely for validation — they throw on out-of-range
+    // values. Internal storage stays as `number | null` for serialization
+    // (SQLite columns, lcov payloads). The VO is the proof of validity.
+    CoveragePercentage.of(props.linesPct);
+    CoveragePercentage.optional(props.branchesPct);
+    CoveragePercentage.optional(props.functionsPct);
     return new FileCoverage({
       ...props,
       hasExistingTest: props.hasExistingTest ?? null,
@@ -40,16 +44,6 @@ export class FileCoverage {
    *  enrich lcov-derived data with workdir-only signals. */
   withHasExistingTest(value: boolean): FileCoverage {
     return new FileCoverage({ ...this.props, hasExistingTest: value });
-  }
-
-  private static assertPct(label: string, value: number): void {
-    if (!Number.isFinite(value) || value < 0 || value > 100) {
-      throw new DomainInvariantError(`FileCoverage.${label} must be a finite number in [0, 100]; got ${value}`);
-    }
-  }
-  private static assertPctOrNull(label: string, value: number | null): void {
-    if (value === null) return;
-    FileCoverage.assertPct(label, value);
   }
 
   get path(): string {

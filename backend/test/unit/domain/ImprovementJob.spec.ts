@@ -21,7 +21,7 @@ describe('ImprovementJob', () => {
   it('rejects start() from non-pending', () => {
     const job = create();
     job.start(42);
-    expect(() => job.start(50)).toThrow(/Cannot start/);
+    expect(() => job.start(50)).toThrow(/Illegal job status transition/);
   });
 
   it('succeeds with prUrl + coverageAfter + mode', () => {
@@ -40,7 +40,7 @@ describe('ImprovementJob', () => {
     const job = create();
     expect(() =>
       job.succeed({ prUrl: 'x', coverageAfter: 100, mode: 'sibling' }),
-    ).toThrow(/Cannot succeed/);
+    ).toThrow(/Illegal job status transition/);
   });
 
   it('rejects empty prUrl on succeed', () => {
@@ -62,7 +62,7 @@ describe('ImprovementJob', () => {
     const j3 = create();
     j3.start(0);
     j3.succeed({ prUrl: 'x', coverageAfter: 100, mode: 'append' });
-    expect(() => j3.fail('after')).toThrow(/terminal/);
+    expect(() => j3.fail('after')).toThrow(/Illegal job status transition/);
   });
 
   it('rejects empty repositoryId or targetFilePath', () => {

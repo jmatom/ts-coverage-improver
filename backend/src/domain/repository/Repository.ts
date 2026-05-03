@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { DomainInvariantError, InvalidGitHubUrlError } from '../errors/DomainError';
+import { Subpath } from './Subpath';
 
 export type AnalysisStatus = 'idle' | 'pending' | 'running' | 'failed';
 
@@ -70,27 +71,14 @@ export class Repository {
       defaultBranch: input.defaultBranch || 'main',
       forkOwner: null,
       lastAnalyzedAt: null,
-      subpath: Repository.normalizeSubpath(input.subpath ?? ''),
+      // Subpath VO enforces the path-traversal guard centrally; we store
+      // the validated `.value` string for persistence/path-join compat.
+      subpath: Subpath.of(input.subpath ?? '').value,
       analysisStatus: 'idle',
       analysisError: null,
       analysisStartedAt: null,
       analysisAutoRetryCount: 0,
     });
-  }
-
-  /**
-   * Trim, strip leading/trailing slashes, and reject path-traversal attempts.
-   * Empty input → empty string (= repo root, default).
-   */
-  private static normalizeSubpath(raw: string): string {
-    const trimmed = raw.trim().replace(/^\/+/, '').replace(/\/+$/, '');
-    if (trimmed === '') return '';
-    if (trimmed.split('/').some((seg) => seg === '..' || seg === '')) {
-      throw new DomainInvariantError(
-        `Repository.subpath must be a clean relative path (no '..', no leading '/'); got '${raw}'`,
-      );
-    }
-    return trimmed;
   }
 
   static rehydrate(props: RepositoryProps): Repository {
