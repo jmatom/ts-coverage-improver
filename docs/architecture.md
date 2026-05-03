@@ -2,9 +2,9 @@
 
 Two views of the same system. The **system diagram** shows the
 structural layering — what code lives where, what each component
-owns. The **request-flow sequence** shows the temporal lifecycle of
-a single Improve job — what happens, in what order, between which
-participants.
+owns. The **sequence diagrams** below show the temporal lifecycles
+of the three end-to-end flows: registering a repo, analyzing its
+coverage, and running an improvement job.
 
 For the deeper "where is each container, who talks to whom" view,
 see [`runtime-topology.md`](./runtime-topology.md).
@@ -43,20 +43,22 @@ flowchart TB
     subgraph External [External Systems]
         GH[GitHub<br/>Octokit + git over HTTPS]
         Anthropic[Anthropic API]
+        Npm[npm registry<br/>registry.npmjs.org]
     end
 
     UI -- HTTP /api/* --> Ctrl
     Backend -- dockerode + /var/run/docker.sock --> SandboxLayer
     Backend -- clone, fork, push, PR --> GH
     SandboxLayer -- API calls --> Anthropic
-    SandboxLayer -- npm registry, GitHub --> GH
+    SandboxLayer -- npm install --> Npm
+    SandboxLayer -- git+https deps --> GH
 
     classDef domain fill:#fef3c7,stroke:#d97706,color:#78350f
     classDef infra fill:#e0e7ff,stroke:#4f46e5,color:#312e81
     classDef ext fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
     class Domain,UC domain
     class Ctrl,Queue,SQLite infra
-    class GH,Anthropic ext
+    class GH,Anthropic,Npm ext
 ```
 
 The yellow nodes (`Domain`, `Use Cases`) contain **zero** NestJS or
