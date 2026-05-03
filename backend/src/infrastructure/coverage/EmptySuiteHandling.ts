@@ -135,6 +135,20 @@ export function emptySuiteFlags(framework: SupportedTestFramework): string[] {
         `--coverage.exclude=**/${PLACEHOLDER_DIR}/**`,
       ];
     case 'mocha':
-      return [];
+      // Mocha exits 0 on empty suites by default, so no placeholder is
+      // needed — and these flags target the *wrapper* (nyc or c8), not
+      // mocha itself. `--all` makes the wrapper report coverage on every
+      // file matched by `--include`, not just the ones loaded during the
+      // (empty) test run. Same semantic effect as jest's
+      // `--collectCoverageFrom`. The runner is responsible for splicing
+      // these flags before the `mocha` binary in the argv so they reach
+      // the wrapper.
+      return [
+        '--all',
+        '--include=src/**/*.{ts,tsx,js,jsx}',
+        '--exclude=**/*.test.*',
+        '--exclude=**/*.spec.*',
+        `--exclude=**/${PLACEHOLDER_DIR}/**`,
+      ];
   }
 }

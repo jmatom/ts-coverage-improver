@@ -74,18 +74,24 @@ export class NpmCoverageRunner implements CoverageRunnerPort {
     // See EmptySuiteHandling.ts for the per-framework flag set + caveats.
     let testCmd = detection.testCmd;
     if (!(await hasAnyTestFile(input.workdir))) {
+      const flags = emptySuiteFlags(detection.framework);
       if (detection.framework === 'mocha') {
-        throw new Error(
-          'No tests found in this repository. Empty-suite handling is currently ' +
-            'supported for jest and vitest only — mocha + nyc/c8 has no equivalent ' +
-            'of jest --collectCoverageFrom. Add at least one test file to proceed.',
-        );
+        // Mocha doesn't need a placeholder (exits 0 on empty suites). Its
+        // empty-suite flags target the *wrapper* (nyc or c8), so they must
+        // be spliced BEFORE the `mocha` binary in the argv — not appended
+        // after it like the jest/vitest case below.
+        const mochaIdx = detection.testCmd.lastIndexOf('mocha');
+        testCmd = [
+          ...detection.testCmd.slice(0, mochaIdx),
+          ...flags,
+          ...detection.testCmd.slice(mochaIdx),
+        ];
+      } else {
+        await writePlaceholderTest(input.workdir, detection.framework);
+        testCmd = [...detection.testCmd, ...flags];
       }
-      await writePlaceholderTest(input.workdir, detection.framework);
-      testCmd = [...detection.testCmd, ...emptySuiteFlags(detection.framework)];
       logs.push(
-        'No tests detected — wrote placeholder + appended empty-suite flags ' +
-          `(${detection.framework})`,
+        `No tests detected — applied empty-suite handling (${detection.framework})`,
       );
     }
 

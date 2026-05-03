@@ -145,8 +145,15 @@ describe('EmptySuiteHandling', () => {
       expect(flags.some((f) => f.includes(`${PLACEHOLDER_DIR}/**`))).toBe(true);
     });
 
-    it('mocha returns an empty flag set (handled by the runner with an explicit error)', () => {
-      expect(emptySuiteFlags('mocha')).toEqual([]);
+    it('mocha gets --all + --include + placeholder exclusion (targets the nyc/c8 wrapper)', () => {
+      const flags = emptySuiteFlags('mocha');
+      expect(flags).toContain('--all');
+      expect(flags.some((f) => f.startsWith('--include=src/'))).toBe(true);
+      expect(flags.some((f) => f.includes(`${PLACEHOLDER_DIR}/**`))).toBe(true);
+      // Test files excluded so they don't show up as 0%-covered alongside
+      // real source files in the dashboard.
+      expect(flags).toContain('--exclude=**/*.test.*');
+      expect(flags).toContain('--exclude=**/*.spec.*');
     });
   });
 });
