@@ -223,18 +223,38 @@ Stall warnings look like:
 Two complementary signals: caps tell you the *intended* capacity,
 stalls tell you whether the work is fitting inside the loop's budget.
 
+## Crash recovery on boot
+
+The in-memory promise chains die with the process; the SQLite rows
+survive. Boot reconciles this in two steps:
+
+1. **Orphan `running` rows** (improvement jobs and analyses) are handled
+   inline in the `SqliteConnection` provider factory by
+   `reconcileOrphanRunningJobs` / `reconcileOrphanRunningAnalyses`. By
+   definition, any row still `running` at boot was interrupted —
+   there's no worker holding it. The reconciler either auto-retries it
+   once (resets to `pending`, bumps `auto_retry_count`) or hard-fails
+   it once the budget is exhausted. The cap of 1 prevents a poison job
+   from boot-looping the backend.
+2. **Pending rows** (jobs and analyses) are re-enqueued by
+   `RecoverPendingWork`, invoked from `AppModule.onModuleInit` after
+   the GitHub + sandbox readiness checks pass. These rows never started
+   running, so the right action is to actually run them. Re-enqueue
+   bypasses `RequestImprovementJob`'s admission control (queue-depth
+   cap, idempotency guard) — these jobs were already admitted before
+   the restart, double-charging them would be wrong.
+
+The two steps are ordered by Nest's lifecycle: the SQLite provider
+factory runs at module construction, before `onModuleInit` fires, so
+`running` → `pending` transitions from step 1 are visible to step 2's
+`findByStatus('pending')` query.
+
 ## What's deliberately not implemented
 
 - **Per-repo fairness.** If 5 repos each enqueue 3 jobs and the cap is
   2, repo #1 currently wins both slots, then again on the next round,
   starving the others. Round-robin scheduling across repos is a
   follow-up; FIFO is acceptable for the take-home.
-- **Queue persistence on backend restart.** Pending jobs are persisted
-  in SQLite, but the in-memory promise chains are not — on restart, the
-  pending rows would need to be re-enqueued. `reconcileOrphanRunningJobs`
-  already handles `running` rows (marks them `failed` with a clear
-  reason); extending this to re-enqueue `pending` is one method on the
-  scheduler.
 - **Distributed concurrency control.** Single-node only. A multi-node
   deployment would need shared state for the semaphores (Redis,
   Postgres advisory locks, etc.). The current architecture targets a
