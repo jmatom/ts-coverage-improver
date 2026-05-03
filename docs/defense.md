@@ -27,6 +27,8 @@ The threshold is configurable — default 80% per the spec example. Lowest cover
 **Trade-off you can defend:** *Why run the tests ourselves rather than fetching from Coveralls / Codecov?*
 Answer: we have to re-run the tests later anyway (to validate the AI's work — see Q2), so adding an external dependency for the *initial* scan is code with no payoff. One mechanism, used twice.
 
+**Empty-suite handling — the "every project starts at zero" case.** A repo with no tests is a legitimate baseline (the demo target starts here), but jest/vitest exit non-zero on "no tests found" and the flow would short-circuit with a useless error. Inside the disposable workdir, `EmptySuiteHandling` plants a placeholder test so the runner exits 0, and adds coverage flags so lcov lists every source file at 0% — giving the dashboard rows the user can click Improve on. Two subtleties: (a) the per-framework `defaultTestCmd` bypasses the project's `scripts.test` entirely in this mode, because routing flags through `npm test --` is unreliable (some wrappers strip args, others have their own `--`); (b) Mocha skips the placeholder (it exits 0 on empty suites natively) and the wrapper flags get spliced *before* the `mocha` argv token so nyc/c8 actually receive them.
+
 ### 2. "Has the AI written something useful, not just something that compiles?"
 
 This is the riskiest part of the product. The spec says "*meaningful* automated tests." An AI happily writes:
@@ -186,6 +188,8 @@ pretended-into-existence.
 
 ## Walking the live demo
 
+Recorded happy-path backup: **https://youtu.be/LGqJd7-IKx8** — ~3 min, end-to-end against the [`jmatom/ts-coverage-demo`](https://github.com/jmatom/ts-coverage-demo) calculator repo. If the live run hits a network or PAT issue, the video covers the same beats.
+
 Step by step, what to point at and what each step proves:
 
 1. **`docker compose up --build`** — sandbox image builds before backend; backend boots; PAT gets validated; sandbox readiness is checked. *Proves:* boot-time validation; if anything is misconfigured you see it in 3 seconds, not 3 minutes into the demo.
@@ -261,8 +265,8 @@ Two scaling axes:
 **Q: What if Claude writes test code that imports something not in the project's deps?**
 The test run fails. That's a behavioral failure → no sibling fallback → job ends `failed` with the failed import in the logs. Honest behavior. Future improvement: feed the dep list into the AI's prompt as a constraint.
 
-**Q: A few application-layer files import `Logger` from `@nestjs/common` directly. Doesn't that violate the "no framework imports in domain/application" rule?**
-Yes, deliberately. Logging is a cross-cutting instrumentation concern, not a behavioral dependency — it doesn't change the use case's outcome, it observes it. Ports earn their cost through substitutability; a logger has one prod implementation and no test where we assert on its calls. Adding a `LoggerPort` would dilute the meaning of the real ports (`JobRepository`, `TestGenerator`, `SandboxPort` — each with multiple implementations) without improving a single test, so we use `new Logger('Context')` directly and accept the lone framework import as the price. **For a take-home this trade-off was the right call to me**; for a long-lived production codebase where the framework choice itself might be revisited (e.g., migrating off Nest), I'd add a `LoggerPort` adapter so the application layer is genuinely framework-free — ~30 minutes of work and four small files. Happy to add it on request.
+**Q: How does the domain/application layer log without importing `@nestjs/common`?**
+Through a `LoggerPort` defined in `domain/ports/`, with a single Nest-backed adapter (`NestLoggerFactory`) wired in `infrastructure/`. `grep "from '@nestjs/common'" backend/src/{domain,application}` returns zero hits — the rule holds end-to-end, not just for the load-bearing ports. The honest trade-off elsewhere: I deferred wrapping `CommitSha` and `BranchName` as VOs (they're still raw `string` at the boundary). The ones that earn their keep ship — `RepositoryId` and `JobId` for IDs at the controller boundary, `JobStatusValue` for the lifecycle transition table, `CoveragePercentage` for the `[0,100]` range check, `Subpath` for path-traversal — but wrapping every git-shaped primitive at this scale would dilute those load-bearing VOs without catching a real class of bug. For a long-lived codebase with a wider team, I'd add them; for a 3-day take-home with one author, the cost/value didn't pencil out.
 
 ---
 
@@ -279,8 +283,9 @@ These are decisions made after the spec was satisfied, in service of "would this
 | **Event-loop blocking from in-process CPU work** | `monitorEventLoopDelay` polled at 1Hz, warns when worst-case stall ≥ 50ms. Threshold env-configurable. Hot-path `readFileSync`/`existsSync` already converted to `fs/promises` versions |
 | **Monorepo support** | Optional `subpath` at registration. `Repository` aggregate validates (rejects `..` traversal). `AnalyzeRepositoryCoverage` and `RunImprovementJob` split workdir into `cloneRoot` (git ops) vs `packageRoot` (install/tests/AI). Empty subpath = repo root, single-package behavior unchanged |
 | **Per-project Node version** | Sandbox image bakes Node 20 + pre-installs 18 / 22 / 24 via fnm. `NodeVersionDetector` reads `.nvmrc` → `engines.node` → falls back to baked Node 20. Each install/test sandbox call wraps `cmd` with `fnm exec --using=<major>` only when a pin was detected — projects with no pin pay zero wrapper overhead. Detection result is logged once at the start of every analysis (`Node version: 22 (detected from engines.node="^22")`) so the user can see exactly which runtime ran their tests |
+| **CI on every push and PR** | `.github/workflows/ci.yml` runs Node 24 type-check (`tsc --noEmit`) + unit + non-Docker integration tests (the live `DockerSandbox` spec is skipped — it spawns real containers via `dockerode`; SQLite integration tests run against `node:sqlite`'s in-memory mode and are CI-safe). Catches regressions before review |
 
-Each one is small (≤ ~150 LOC), surfaces through a stable env var, and has at least one unit test pinning the behavior. **185/185 tests** across 23 suites.
+Each one is small (≤ ~150 LOC), surfaces through a stable env var, and has at least one unit test pinning the behavior. **281/281 tests** across 34 suites.
 
 ---
 
@@ -331,7 +336,7 @@ For analyses, the counter lives on the Repository aggregate and is **reset on `m
 ### Verification
 
 - 5 dedicated SQLite tests: under-budget jobs requeued, exhausted-budget jobs failed, pending/terminal rows untouched, same coverage for analyses, `markAnalysisRequested` resets the analysis counter.
-- 165/165 total tests green.
+- 281/281 total tests green across 34 suites.
 
 ### What we'd do for production (and why we didn't here)
 
@@ -435,7 +440,7 @@ These are honest follow-ups, ordered by value:
 3. **Folder-tree picker on the registration form** — for monorepos, autocomplete the subpath input by querying GitHub's `git/trees?recursive=1` and filtering to directories that contain a `package.json`. ~150 LOC; covered as a future-state in the chat history.
 4. **CI dispatch on PR open** — currently we don't trigger upstream CI; the PR's CI run depends on the upstream's fork-PR policy. A `gh workflow run` after PR open would close the loop.
 5. **Mutation testing as an optional extra gate** — Stryker on the target file would prove the new tests catch real bugs, not just exercise lines. Slow (minutes), so opt-in per repo.
-6. **Out-of-process queue with worker pool** — swap `InMemoryPerRepoQueue` for SQS FIFO (`MessageGroupId=repositoryId` matches the per-repo serialization invariant natively; visibility timeout = lease; DLQ = budget-exhausted bucket) or Kafka topics keyed by `repositoryId` for higher throughput. Workers become a stateless horizontally-scalable pool. The `JobScheduler` and `RepositoryAnalysisScheduler` ports are already shaped for this swap; **zero domain or application code changes needed**. See "Reliability — crash recovery story" above for the full rationale.
+6. **Out-of-process queue with worker pool** — see ["Improvements for production"](#improvements-for-production) above for the full target architecture (transactional outbox + SQS FIFO / Kafka, workers as a stateless pool). The `JobScheduler` / `RepositoryAnalysisScheduler` ports are already shaped for the swap.
 
 ---
 
