@@ -1,11 +1,11 @@
-import { randomUUID } from 'node:crypto';
 import { DomainInvariantError, InvalidGitHubUrlError } from '../errors/DomainError';
 import { Subpath } from './Subpath';
+import { RepositoryId } from './RepositoryId';
 
 export type AnalysisStatus = 'idle' | 'pending' | 'running' | 'failed';
 
 export interface RepositoryProps {
-  id: string;
+  id: RepositoryId;
   owner: string;
   name: string;
   defaultBranch: string;
@@ -65,7 +65,7 @@ export class Repository {
       throw new DomainInvariantError('Repository.owner and Repository.name must be non-empty');
     }
     return new Repository({
-      id: randomUUID(),
+      id: RepositoryId.new(),
       owner: input.owner,
       name: input.name,
       defaultBranch: input.defaultBranch || 'main',
@@ -85,7 +85,7 @@ export class Repository {
     return new Repository({ ...props });
   }
 
-  get id(): string {
+  get id(): RepositoryId {
     return this.props.id;
   }
   get owner(): string {

@@ -11,6 +11,8 @@ import { GetJobStatus } from '@application/usecases/GetJobStatus';
 import { ListJobs } from '@application/usecases/ListJobs';
 import { DeleteJob } from '@application/usecases/DeleteJob';
 import { JobNotFoundError } from '@domain/errors/DomainError';
+import { JobId } from '@domain/job/JobId';
+import { RepositoryId } from '@domain/repository/RepositoryId';
 
 @Controller('jobs')
 export class JobsController {
@@ -23,12 +25,13 @@ export class JobsController {
   @Get()
   async listForRepo(@Query('repositoryId') repositoryId?: string) {
     if (!repositoryId) throw new BadRequestException('repositoryId query param is required');
-    return this.list.execute({ repositoryId });
+    return this.list.execute({ repositoryId: RepositoryId.of(repositoryId) });
   }
 
   @Get(':id')
   async detail(@Param('id') id: string) {
-    const detail = await this.getStatus.execute({ jobId: id });
+    const jobId = JobId.of(id);
+    const detail = await this.getStatus.execute({ jobId });
     if (!detail) throw new JobNotFoundError(id);
     return detail;
   }
@@ -36,6 +39,6 @@ export class JobsController {
   @Delete(':id')
   @HttpCode(204)
   async remove(@Param('id') id: string): Promise<void> {
-    await this.removeJob.execute({ id });
+    await this.removeJob.execute({ id: JobId.of(id) });
   }
 }

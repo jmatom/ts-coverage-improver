@@ -1,10 +1,12 @@
 import { ImprovementJob } from '../job/ImprovementJob';
+import { JobId } from '../job/JobId';
 import { JobStatus } from '../job/JobStatus';
+import { RepositoryId } from '../repository/RepositoryId';
 
 export interface JobRepository {
   save(job: ImprovementJob): Promise<void>;
-  findById(id: string): Promise<ImprovementJob | null>;
-  listByRepository(repositoryId: string): Promise<ImprovementJob[]>;
+  findById(id: JobId): Promise<ImprovementJob | null>;
+  listByRepository(repositoryId: RepositoryId): Promise<ImprovementJob[]>;
   findByStatus(status: JobStatus): Promise<ImprovementJob[]>;
   /**
    * Returns the most recent non-terminal job (status pending or running) for
@@ -13,13 +15,13 @@ export interface JobRepository {
    * for the same file shouldn't enqueue a duplicate.
    */
   findInFlightForFile(
-    repositoryId: string,
+    repositoryId: RepositoryId,
     targetFilePath: string,
   ): Promise<ImprovementJob | null>;
-  appendLog(jobId: string, line: string): Promise<void>;
-  readLogs(jobId: string): Promise<string[]>;
+  appendLog(jobId: JobId, line: string): Promise<void>;
+  readLogs(jobId: JobId): Promise<string[]>;
   /** Delete a job. ON DELETE CASCADE drops its job_logs in the same statement. */
-  delete(jobId: string): Promise<void>;
+  delete(jobId: JobId): Promise<void>;
   /**
    * Count of jobs in non-terminal status (pending OR running) across all
    * repositories. Used by the request-time backpressure guard in

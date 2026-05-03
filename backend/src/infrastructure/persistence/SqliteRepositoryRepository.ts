@@ -1,5 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import { AnalysisStatus, Repository } from '@domain/repository/Repository';
+import { RepositoryId } from '@domain/repository/RepositoryId';
 import { RepositoryRepository } from '@domain/ports/RepositoryRepository';
 
 interface Row {
@@ -46,7 +47,7 @@ export class SqliteRepositoryRepository implements RepositoryRepository {
            analysis_auto_retry_count = excluded.analysis_auto_retry_count`,
       )
       .run(
-        props.id,
+        props.id.value,
         props.owner,
         props.name,
         props.defaultBranch,
@@ -60,8 +61,8 @@ export class SqliteRepositoryRepository implements RepositoryRepository {
       );
   }
 
-  async findById(id: string): Promise<Repository | null> {
-    const row = this.db.prepare('SELECT * FROM repositories WHERE id = ?').get(id) as
+  async findById(id: RepositoryId): Promise<Repository | null> {
+    const row = this.db.prepare('SELECT * FROM repositories WHERE id = ?').get(id.value) as
       | unknown
       | undefined;
     return row ? this.fromRow(row as Row) : null;
@@ -88,16 +89,16 @@ export class SqliteRepositoryRepository implements RepositoryRepository {
     return rows.map((r) => this.fromRow(r));
   }
 
-  async delete(id: string): Promise<void> {
+  async delete(id: RepositoryId): Promise<void> {
     // Foreign-key cascades drop coverage_reports → file_coverages and
     // improvement_jobs → job_logs. PRAGMA foreign_keys=ON is set in
     // SqliteConnection, so this is a single statement.
-    this.db.prepare('DELETE FROM repositories WHERE id = ?').run(id);
+    this.db.prepare('DELETE FROM repositories WHERE id = ?').run(id.value);
   }
 
   private fromRow(row: Row): Repository {
     return Repository.rehydrate({
-      id: row.id,
+      id: RepositoryId.of(row.id),
       owner: row.owner,
       name: row.name,
       defaultBranch: row.default_branch,

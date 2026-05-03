@@ -2,6 +2,7 @@ import { RequestImprovementJob } from '../../../src/application/usecases/Request
 import { CoverageReport } from '../../../src/domain/coverage/CoverageReport';
 import { FileCoverage } from '../../../src/domain/coverage/FileCoverage';
 import { ImprovementJob } from '../../../src/domain/job/ImprovementJob';
+import { RepositoryId } from '../../../src/domain/repository/RepositoryId';
 import { JobRepository } from '../../../src/domain/ports/JobRepository';
 import { CoverageReportRepository } from '../../../src/domain/ports/CoverageReportRepository';
 import { JobScheduler } from '../../../src/domain/services/JobScheduler';
@@ -13,9 +14,9 @@ import {
   NoCoverageReportError,
 } from '../../../src/domain/errors/DomainError';
 
-const makeReport = (filePaths: string[]) =>
+const makeReport = (repoId: RepositoryId, filePaths: string[]) =>
   CoverageReport.create({
-    repositoryId: 'r1',
+    repositoryId: repoId,
     commitSha: 'sha',
     files: filePaths.map((p) =>
       FileCoverage.create({
@@ -74,12 +75,13 @@ class StubScheduler implements JobScheduler {
 
 describe('RequestImprovementJob', () => {
   it('persists pending job and enqueues on the scheduler', async () => {
-    const reports = new StubReports(makeReport(['src/foo.ts', 'src/bar.ts']));
+    const repoId = RepositoryId.new();
+    const reports = new StubReports(makeReport(repoId, ['src/foo.ts', 'src/bar.ts']));
     const jobs = new StubJobs();
     const scheduler = new StubScheduler();
     const useCase = new RequestImprovementJob(jobs, reports, scheduler);
 
-    const dto = await useCase.execute({ repositoryId: 'r1', targetFilePath: 'src/foo.ts' });
+    const dto = await useCase.execute({ repositoryId: repoId, targetFilePath: 'src/foo.ts' });
 
     expect(dto.status).toBe('pending');
     expect(dto.targetFilePath).toBe('src/foo.ts');
@@ -97,25 +99,27 @@ describe('RequestImprovementJob', () => {
       new StubScheduler(),
     );
     await expect(
-      useCase.execute({ repositoryId: 'r1', targetFilePath: 'src/foo.ts' }),
+      useCase.execute({ repositoryId: RepositoryId.new(), targetFilePath: 'src/foo.ts' }),
     ).rejects.toBeInstanceOf(NoCoverageReportError);
   });
 
   it('rejects with FileNotInLatestReportError when target file is missing', async () => {
-    const reports = new StubReports(makeReport(['src/foo.ts']));
+    const repoId = RepositoryId.new();
+    const reports = new StubReports(makeReport(repoId, ['src/foo.ts']));
     const useCase = new RequestImprovementJob(
       new StubJobs(),
       reports,
       new StubScheduler(),
     );
     await expect(
-      useCase.execute({ repositoryId: 'r1', targetFilePath: 'src/missing.ts' }),
+      useCase.execute({ repositoryId: repoId, targetFilePath: 'src/missing.ts' }),
     ).rejects.toBeInstanceOf(FileNotInLatestReportError);
   });
 
   it('rejects when target file is already at 100% (skip-already-covered fast-fail)', async () => {
+    const repoId = RepositoryId.new();
     const fullyCoveredReport = CoverageReport.create({
-      repositoryId: 'r1',
+      repositoryId: repoId,
       commitSha: 'sha',
       files: [
         FileCoverage.create({
@@ -133,16 +137,17 @@ describe('RequestImprovementJob', () => {
       new StubScheduler(),
     );
     await expect(
-      useCase.execute({ repositoryId: 'r1', targetFilePath: 'src/foo.ts' }),
+      useCase.execute({ repositoryId: repoId, targetFilePath: 'src/foo.ts' }),
     ).rejects.toBeInstanceOf(FileAlreadyFullyCoveredError);
   });
 
   it('rejects with JobAlreadyInFlightError when an in-flight job exists for the same file', async () => {
-    const reports = new StubReports(makeReport(['src/foo.ts']));
+    const repoId = RepositoryId.new();
+    const reports = new StubReports(makeReport(repoId, ['src/foo.ts']));
     const jobs = new StubJobs();
     // Pretend a previously-queued job is still pending for this file.
     const existing = ImprovementJob.create({
-      repositoryId: 'r1',
+      repositoryId: repoId,
       targetFilePath: 'src/foo.ts',
     });
     jobs.inFlight = existing;
@@ -150,7 +155,7 @@ describe('RequestImprovementJob', () => {
     const useCase = new RequestImprovementJob(jobs, reports, scheduler);
 
     await expect(
-      useCase.execute({ repositoryId: 'r1', targetFilePath: 'src/foo.ts' }),
+      useCase.execute({ repositoryId: repoId, targetFilePath: 'src/foo.ts' }),
     ).rejects.toBeInstanceOf(JobAlreadyInFlightError);
     // Idempotency: nothing was persisted or enqueued by the rejected request.
     expect(jobs.saved).toHaveLength(0);
@@ -159,7 +164,8 @@ describe('RequestImprovementJob', () => {
 
   describe('queue-depth backpressure', () => {
     it('rejects with QueueDepthExceededError once the cap is hit', async () => {
-      const reports = new StubReports(makeReport(['src/foo.ts']));
+      const repoId = RepositoryId.new();
+      const reports = new StubReports(makeReport(repoId, ['src/foo.ts']));
       const jobs = new StubJobs();
       jobs.active = 5;
       const scheduler = new StubScheduler();
@@ -168,7 +174,7 @@ describe('RequestImprovementJob', () => {
       });
 
       await expect(
-        useCase.execute({ repositoryId: 'r1', targetFilePath: 'src/foo.ts' }),
+        useCase.execute({ repositoryId: repoId, targetFilePath: 'src/foo.ts' }),
       ).rejects.toMatchObject({
         code: 'QUEUE_DEPTH_EXCEEDED',
       });
@@ -177,7 +183,8 @@ describe('RequestImprovementJob', () => {
     });
 
     it('admits when cap not yet reached', async () => {
-      const reports = new StubReports(makeReport(['src/foo.ts']));
+      const repoId = RepositoryId.new();
+      const reports = new StubReports(makeReport(repoId, ['src/foo.ts']));
       const jobs = new StubJobs();
       jobs.active = 4;
       const scheduler = new StubScheduler();
@@ -186,7 +193,7 @@ describe('RequestImprovementJob', () => {
       });
 
       const dto = await useCase.execute({
-        repositoryId: 'r1',
+        repositoryId: repoId,
         targetFilePath: 'src/foo.ts',
       });
       expect(dto.status).toBe('pending');
@@ -194,7 +201,8 @@ describe('RequestImprovementJob', () => {
     });
 
     it('disabled by maxQueueDepth=0 (default)', async () => {
-      const reports = new StubReports(makeReport(['src/foo.ts']));
+      const repoId = RepositoryId.new();
+      const reports = new StubReports(makeReport(repoId, ['src/foo.ts']));
       const jobs = new StubJobs();
       jobs.active = 9999;
       const useCase = new RequestImprovementJob(
@@ -204,7 +212,7 @@ describe('RequestImprovementJob', () => {
         // omit options → cap defaults to 0 → no admission control
       );
       const dto = await useCase.execute({
-        repositoryId: 'r1',
+        repositoryId: repoId,
         targetFilePath: 'src/foo.ts',
       });
       expect(dto.status).toBe('pending');
@@ -213,11 +221,12 @@ describe('RequestImprovementJob', () => {
     it('idempotency takes precedence over backpressure', async () => {
       // If both an in-flight job AND queue saturation hold, surface the more
       // specific 409 (already in flight) rather than 503 — better UX.
-      const reports = new StubReports(makeReport(['src/foo.ts']));
+      const repoId = RepositoryId.new();
+      const reports = new StubReports(makeReport(repoId, ['src/foo.ts']));
       const jobs = new StubJobs();
       jobs.active = 999;
       jobs.inFlight = ImprovementJob.create({
-        repositoryId: 'r1',
+        repositoryId: repoId,
         targetFilePath: 'src/foo.ts',
       });
       const useCase = new RequestImprovementJob(
@@ -227,7 +236,7 @@ describe('RequestImprovementJob', () => {
         { maxQueueDepth: 5 },
       );
       await expect(
-        useCase.execute({ repositoryId: 'r1', targetFilePath: 'src/foo.ts' }),
+        useCase.execute({ repositoryId: repoId, targetFilePath: 'src/foo.ts' }),
       ).rejects.toBeInstanceOf(JobAlreadyInFlightError);
     });
   });

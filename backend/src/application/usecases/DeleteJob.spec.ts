@@ -1,5 +1,7 @@
 import { DeleteJob } from './DeleteJob';
 import { ImprovementJob } from '@domain/job/ImprovementJob';
+import { JobId } from '@domain/job/JobId';
+import { RepositoryId } from '@domain/repository/RepositoryId';
 import { JobRepository } from '@domain/ports/JobRepository';
 import {
   CannotDeleteInFlightJobError,
@@ -8,8 +10,8 @@ import {
 
 function makeJob(status: 'pending' | 'running' | 'succeeded' | 'failed'): ImprovementJob {
   return ImprovementJob.rehydrate({
-    id: 'job-id-1234',
-    repositoryId: 'repo-1',
+    id: JobId.new(),
+    repositoryId: RepositoryId.new(),
     targetFilePath: 'src/foo.ts',
     status,
     mode: null,
@@ -44,7 +46,7 @@ describe('DeleteJob', () => {
     const repo = makeRepo({ findById: jest.fn().mockResolvedValue(null) });
     const useCase = new DeleteJob(repo);
 
-    await expect(useCase.execute({ id: 'missing-id' })).rejects.toThrow(JobNotFoundError);
+    await expect(useCase.execute({ id: JobId.new() })).rejects.toThrow(JobNotFoundError);
   });
 
   it('throws CannotDeleteInFlightJobError when the job is pending', async () => {

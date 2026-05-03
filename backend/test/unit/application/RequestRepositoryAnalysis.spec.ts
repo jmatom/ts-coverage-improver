@@ -1,4 +1,5 @@
 import { Repository } from '../../../src/domain/repository/Repository';
+import { RepositoryId } from '../../../src/domain/repository/RepositoryId';
 import { RepositoryRepository } from '../../../src/domain/ports/RepositoryRepository';
 import { RepositoryAnalysisScheduler } from '../../../src/domain/services/RepositoryAnalysisScheduler';
 import {
@@ -29,16 +30,16 @@ class FakeRepos implements RepositoryRepository {
 }
 
 class FakeScheduler implements RepositoryAnalysisScheduler {
-  scheduled: Array<{ repoId: string; run: () => Promise<void> }> = [];
-  async scheduleAnalysis(repoId: string, run: () => Promise<void>): Promise<void> {
+  scheduled: Array<{ repoId: RepositoryId; run: () => Promise<void> }> = [];
+  async scheduleAnalysis(repoId: RepositoryId, run: () => Promise<void>): Promise<void> {
     this.scheduled.push({ repoId, run });
   }
 }
 
 class FakeAnalyze {
-  executed: string[] = [];
+  executed: RepositoryId[] = [];
   result: Promise<unknown> = Promise.resolve({ commitSha: 'sha', fileCount: 0 });
-  async execute(input: { repositoryId: string }): Promise<{ commitSha: string; fileCount: number }> {
+  async execute(input: { repositoryId: RepositoryId }): Promise<{ commitSha: string; fileCount: number }> {
     this.executed.push(input.repositoryId);
     return (await this.result) as { commitSha: string; fileCount: number };
   }
@@ -74,7 +75,7 @@ describe('RequestRepositoryAnalysis', () => {
     const analyze = new FakeAnalyze() as unknown as AnalyzeRepositoryCoverage;
     const useCase = new RequestRepositoryAnalysis(repos, scheduler, analyze);
 
-    await expect(useCase.execute({ repositoryId: 'missing' })).rejects.toBeInstanceOf(
+    await expect(useCase.execute({ repositoryId: RepositoryId.new() })).rejects.toBeInstanceOf(
       RepositoryNotFoundError,
     );
     expect(scheduler.scheduled).toHaveLength(0);

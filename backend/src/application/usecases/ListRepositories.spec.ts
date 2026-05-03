@@ -1,12 +1,13 @@
 import { ListRepositories } from './ListRepositories';
 import { Repository } from '@domain/repository/Repository';
+import { RepositoryId } from '@domain/repository/RepositoryId';
 import { CoverageReport } from '@domain/coverage/CoverageReport';
 import { RepositoryRepository } from '@domain/ports/RepositoryRepository';
 import { CoverageReportRepository } from '@domain/ports/CoverageReportRepository';
 
 function makeRepository(overrides: Partial<Parameters<typeof Repository.rehydrate>[0]> = {}): Repository {
   return Repository.rehydrate({
-    id: 'repo-1',
+    id: RepositoryId.new(),
     owner: 'acme',
     name: 'my-repo',
     defaultBranch: 'main',
@@ -73,7 +74,7 @@ describe('ListRepositories', () => {
   });
 
   it('returns a summary with coverage data when a report exists for the repository', async () => {
-    const repo = makeRepository({ id: 'repo-1', owner: 'acme', name: 'my-repo' });
+    const repo = makeRepository({ owner: 'acme', name: 'my-repo' });
     const report = makeCoverageReport(85.5, 3);
     const repos = makeRepoRepository({ list: jest.fn().mockResolvedValue([repo]) });
     const reports = makeCoverageReportRepository({
@@ -126,8 +127,9 @@ describe('ListRepositories', () => {
 
   it('maps all repository fields onto the summary dto', async () => {
     const startedAt = new Date('2024-06-01T08:00:00.000Z');
+    const repoId = RepositoryId.new();
     const repo = makeRepository({
-      id: 'repo-42',
+      id: repoId,
       owner: 'org',
       name: 'project',
       defaultBranch: 'develop',
@@ -144,7 +146,7 @@ describe('ListRepositories', () => {
     const result = await useCase.execute();
 
     expect(result[0]).toMatchObject({
-      id: 'repo-42',
+      id: repoId.value,
       owner: 'org',
       name: 'project',
       defaultBranch: 'develop',
@@ -157,8 +159,10 @@ describe('ListRepositories', () => {
   });
 
   it('queries coverage for each repository individually', async () => {
-    const repo1 = makeRepository({ id: 'repo-1' });
-    const repo2 = makeRepository({ id: 'repo-2' });
+    const id1 = RepositoryId.new();
+    const id2 = RepositoryId.new();
+    const repo1 = makeRepository({ id: id1 });
+    const repo2 = makeRepository({ id: id2 });
     const findLatest = jest.fn().mockResolvedValue(null);
     const repos = makeRepoRepository({ list: jest.fn().mockResolvedValue([repo1, repo2]) });
     const reports = makeCoverageReportRepository({ findLatestByRepository: findLatest });
@@ -166,8 +170,8 @@ describe('ListRepositories', () => {
 
     await useCase.execute();
 
-    expect(findLatest).toHaveBeenCalledWith('repo-1');
-    expect(findLatest).toHaveBeenCalledWith('repo-2');
+    expect(findLatest).toHaveBeenCalledWith(id1);
+    expect(findLatest).toHaveBeenCalledWith(id2);
     expect(findLatest).toHaveBeenCalledTimes(2);
   });
 });

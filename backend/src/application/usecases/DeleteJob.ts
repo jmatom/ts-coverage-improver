@@ -1,3 +1,4 @@
+import { JobId } from '@domain/job/JobId';
 import { JobRepository } from '@domain/ports/JobRepository';
 import {
   CannotDeleteInFlightJobError,
@@ -13,11 +14,11 @@ import {
 export class DeleteJob {
   constructor(private readonly jobs: JobRepository) {}
 
-  async execute(input: { id: string }): Promise<void> {
+  async execute(input: { id: JobId }): Promise<void> {
     const job = await this.jobs.findById(input.id);
-    if (!job) throw new JobNotFoundError(input.id);
+    if (!job) throw new JobNotFoundError(input.id.value);
     if (!job.isTerminal()) {
-      throw new CannotDeleteInFlightJobError(job.id);
+      throw new CannotDeleteInFlightJobError(job.id.value);
     }
     await this.jobs.delete(input.id);
   }

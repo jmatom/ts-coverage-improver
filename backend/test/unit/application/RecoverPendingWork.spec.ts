@@ -1,6 +1,7 @@
 import { ImprovementJob } from '../../../src/domain/job/ImprovementJob';
 import { JobStatus } from '../../../src/domain/job/JobStatus';
 import { Repository, AnalysisStatus } from '../../../src/domain/repository/Repository';
+import { RepositoryId } from '../../../src/domain/repository/RepositoryId';
 import { JobRepository } from '../../../src/domain/ports/JobRepository';
 import { RepositoryRepository } from '../../../src/domain/ports/RepositoryRepository';
 import { JobScheduler } from '../../../src/domain/services/JobScheduler';
@@ -59,16 +60,16 @@ class FakeJobScheduler implements JobScheduler {
 }
 
 class FakeAnalysisScheduler implements RepositoryAnalysisScheduler {
-  scheduled: Array<{ repoId: string; run: () => Promise<void> }> = [];
-  async scheduleAnalysis(repoId: string, run: () => Promise<void>): Promise<void> {
+  scheduled: Array<{ repoId: RepositoryId; run: () => Promise<void> }> = [];
+  async scheduleAnalysis(repoId: RepositoryId, run: () => Promise<void>): Promise<void> {
     this.scheduled.push({ repoId, run });
   }
 }
 
 class FakeAnalyze {
-  executed: string[] = [];
+  executed: RepositoryId[] = [];
   result: Promise<unknown> = Promise.resolve({ commitSha: 'sha', fileCount: 0 });
-  async execute(input: { repositoryId: string }): Promise<{ commitSha: string; fileCount: number }> {
+  async execute(input: { repositoryId: RepositoryId }): Promise<{ commitSha: string; fileCount: number }> {
     this.executed.push(input.repositoryId);
     return (await this.result) as { commitSha: string; fileCount: number };
   }
@@ -87,11 +88,13 @@ describe('RecoverPendingWork', () => {
   });
 
   it('re-enqueues all pending improvement jobs onto the scheduler', async () => {
+    const r1 = RepositoryId.new();
+    const r2 = RepositoryId.new();
     const jobs = new FakeJobs();
     jobs.pending = [
-      ImprovementJob.create({ repositoryId: 'r1', targetFilePath: 'a.ts' }),
-      ImprovementJob.create({ repositoryId: 'r1', targetFilePath: 'b.ts' }),
-      ImprovementJob.create({ repositoryId: 'r2', targetFilePath: 'c.ts' }),
+      ImprovementJob.create({ repositoryId: r1, targetFilePath: 'a.ts' }),
+      ImprovementJob.create({ repositoryId: r1, targetFilePath: 'b.ts' }),
+      ImprovementJob.create({ repositoryId: r2, targetFilePath: 'c.ts' }),
     ];
     const scheduler = new FakeJobScheduler();
     const useCase = new RecoverPendingWork(
@@ -161,7 +164,7 @@ describe('RecoverPendingWork', () => {
 
   it('handles a mix of pending jobs AND pending analyses in the same call', async () => {
     const jobs = new FakeJobs();
-    jobs.pending = [ImprovementJob.create({ repositoryId: 'r1', targetFilePath: 'a.ts' })];
+    jobs.pending = [ImprovementJob.create({ repositoryId: RepositoryId.new(), targetFilePath: 'a.ts' })];
     const repos = new FakeRepos();
     const a = Repository.create({ owner: 'o', name: 'r', defaultBranch: 'main' });
     a.markAnalysisRequested();

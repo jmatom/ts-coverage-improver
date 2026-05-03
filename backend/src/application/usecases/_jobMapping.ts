@@ -3,8 +3,8 @@ import { JobDetailDto, JobDto } from '../dto/Dto';
 
 export function jobToDto(job: ImprovementJob): JobDto {
   return {
-    id: job.id,
-    repositoryId: job.repositoryId,
+    id: job.id.value,
+    repositoryId: job.repositoryId.value,
     targetFilePath: job.targetFilePath,
     status: job.status,
     mode: job.mode,

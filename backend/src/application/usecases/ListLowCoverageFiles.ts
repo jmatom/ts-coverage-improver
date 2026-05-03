@@ -1,13 +1,14 @@
 import { CoverageReportRepository } from '@domain/ports/CoverageReportRepository';
 import { CoverageAnalyzer } from '@domain/services/CoverageAnalyzer';
 import { CoverageThreshold } from '@domain/coverage/CoverageThreshold';
+import { RepositoryId } from '@domain/repository/RepositoryId';
 import { FileCoverageDto } from '../dto/Dto';
 
 export class ListLowCoverageFiles {
   constructor(private readonly reports: CoverageReportRepository) {}
 
   async execute(input: {
-    repositoryId: string;
+    repositoryId: RepositoryId;
     threshold: CoverageThreshold;
   }): Promise<FileCoverageDto[]> {
     const latest = await this.reports.findLatestByRepository(input.repositoryId);

@@ -1,3 +1,5 @@
+import { JobId } from '@domain/job/JobId';
+
 /**
  * Application-layer port: invoked by the JobScheduler to actually execute
  * an enqueued improvement job. The Day-2 RunImprovementJob implements this.
@@ -7,5 +9,5 @@
  * are caught by the queue as a safety net.
  */
 export interface JobExecutor {
-  execute(jobId: string): Promise<void>;
+  execute(jobId: JobId): Promise<void>;
 }

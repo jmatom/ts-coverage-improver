@@ -2,6 +2,7 @@ import { DeleteRepository } from './DeleteRepository';
 import { RepositoryRepository } from '@domain/ports/RepositoryRepository';
 import { RepositoryNotFoundError } from '@domain/errors/DomainError';
 import { Repository } from '@domain/repository/Repository';
+import { RepositoryId } from '@domain/repository/RepositoryId';
 
 function makeRepo(overrides: Partial<RepositoryRepository> = {}): RepositoryRepository {
   return {
@@ -17,7 +18,7 @@ function makeRepo(overrides: Partial<RepositoryRepository> = {}): RepositoryRepo
 
 function makeRepository(): Repository {
   return Repository.rehydrate({
-    id: 'repo-1234',
+    id: RepositoryId.new(),
     owner: 'owner',
     name: 'repo',
     defaultBranch: 'main',
@@ -36,7 +37,7 @@ describe('DeleteRepository', () => {
     const repo = makeRepo({ findById: jest.fn().mockResolvedValue(null) });
     const useCase = new DeleteRepository(repo);
 
-    await expect(useCase.execute({ id: 'missing-id' })).rejects.toThrow(RepositoryNotFoundError);
+    await expect(useCase.execute({ id: RepositoryId.new() })).rejects.toThrow(RepositoryNotFoundError);
   });
 
   it('deletes the repository when it exists', async () => {

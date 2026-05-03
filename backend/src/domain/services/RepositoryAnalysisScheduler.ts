@@ -1,3 +1,5 @@
+import { RepositoryId } from '../repository/RepositoryId';
+
 /**
  * Domain service interface: schedules a repository-analysis worker call
  * onto the per-repository serial queue.
@@ -17,5 +19,5 @@ export interface RepositoryAnalysisScheduler {
    * per-repo queue reaches it. Returns immediately after enqueueing, NOT
    * after the work completes.
    */
-  scheduleAnalysis(repositoryId: string, run: () => Promise<void>): Promise<void>;
+  scheduleAnalysis(repositoryId: RepositoryId, run: () => Promise<void>): Promise<void>;
 }

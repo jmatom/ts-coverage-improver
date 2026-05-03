@@ -1,6 +1,7 @@
 import { CoverageAnalyzer } from '../../../src/domain/services/CoverageAnalyzer';
 import { CoverageReport } from '../../../src/domain/coverage/CoverageReport';
 import { FileCoverage } from '../../../src/domain/coverage/FileCoverage';
+import { RepositoryId } from '../../../src/domain/repository/RepositoryId';
 
 const fc = (path: string, linesPct: number) =>
   FileCoverage.create({
@@ -13,7 +14,7 @@ const fc = (path: string, linesPct: number) =>
 
 describe('CoverageAnalyzer', () => {
   const report = CoverageReport.create({
-    repositoryId: 'r',
+    repositoryId: RepositoryId.new(),
     commitSha: 's',
     files: [fc('a.ts', 95), fc('b.ts', 50), fc('c.ts', 79.999), fc('d.ts', 80)],
   });
@@ -30,7 +31,7 @@ describe('CoverageAnalyzer', () => {
 
   it('returns empty when all files at or above threshold', () => {
     const r = CoverageReport.create({
-      repositoryId: 'r',
+      repositoryId: RepositoryId.new(),
       commitSha: 's',
       files: [fc('a.ts', 90), fc('b.ts', 100)],
     });

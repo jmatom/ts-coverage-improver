@@ -3,6 +3,8 @@ import { join } from 'node:path';
 import { SecretScanner } from '@domain/security/SecretScanner';
 import { CoverageReport } from '@domain/coverage/CoverageReport';
 import { ImprovementJob } from '@domain/job/ImprovementJob';
+import { JobId } from '@domain/job/JobId';
+import { RepositoryId } from '@domain/repository/RepositoryId';
 import { ImprovementMode } from '@domain/job/JobStatus';
 import { siblingTestPath, TestConvention } from '@domain/job/testFileNaming';
 import { JobRepository } from '@domain/ports/JobRepository';
@@ -59,10 +61,10 @@ const MAX_ATTEMPTS_PER_MODE = 2;
 export class RunImprovementJob implements JobExecutor {
   constructor(private readonly deps: RunImprovementJobDeps) {}
 
-  async execute(jobId: string): Promise<void> {
+  async execute(jobId: JobId): Promise<void> {
     const job = await this.deps.jobs.findById(jobId);
     if (!job) {
-      throw new Error(`Job ${jobId} not found`);
+      throw new Error(`Job ${jobId.value} not found`);
     }
     if (job.isTerminal()) return;
 
@@ -71,7 +73,7 @@ export class RunImprovementJob implements JobExecutor {
 
     try {
       const repo = await this.deps.repos.findById(job.repositoryId);
-      if (!repo) throw new Error(`Repository ${job.repositoryId} not found`);
+      if (!repo) throw new Error(`Repository ${job.repositoryId.value} not found`);
       const latest = await this.deps.reports.findLatestByRepository(repo.id);
       if (!latest) throw new Error('No coverage report — analyze repo first');
       const fileCov = latest.fileFor(job.targetFilePath);
@@ -108,7 +110,7 @@ export class RunImprovementJob implements JobExecutor {
       }
 
       // Clone root: where the entire repo lives.
-      const cloneRoot = join(this.deps.jobWorkdirRoot, `job-${job.id}`);
+      const cloneRoot = join(this.deps.jobWorkdirRoot, `job-${job.id.value}`);
       await log(`Cloning ${repo.cloneUrl} into ${cloneRoot}`);
       await this.deps.git.clone({
         cloneUrl: repo.cloneUrl,
@@ -240,7 +242,7 @@ export class RunImprovementJob implements JobExecutor {
       }
 
       const fork = await this.ensureForkOnce(repo);
-      const branch = `coverage-improve/${slugFile(job.targetFilePath)}-${job.id.slice(0, 8)}`;
+      const branch = `coverage-improve/${slugFile(job.targetFilePath)}-${job.id.value.slice(0, 8)}`;
       const remoteUrl = `https://x-access-token:${this.deps.githubToken}@github.com/${fork.owner}/${fork.name}.git`;
       const message = `test: improve coverage for ${job.targetFilePath} (${success.coverageBefore.toFixed(0)}% → ${success.coverageAfter.toFixed(0)}%)`;
       await log(`Pushing branch ${branch} to fork ${fork.owner}/${fork.name}`);
@@ -491,7 +493,7 @@ export class RunImprovementJob implements JobExecutor {
 
   /** Idempotent: caches the fork on the Repository aggregate. */
   private async ensureForkOnce(repo: {
-    id: string;
+    id: RepositoryId;
     owner: string;
     name: string;
     forkOwner: string | null;
