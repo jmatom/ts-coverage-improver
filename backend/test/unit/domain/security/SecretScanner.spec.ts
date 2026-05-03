@@ -1,55 +1,55 @@
-import { findSuspectedSecret } from '../../../src/application/util/secretGuard';
+import { SecretScanner } from '../../../../src/domain/security/SecretScanner';
 
-describe('findSuspectedSecret', () => {
+describe('SecretScanner.findIn', () => {
   it('returns null on plain text', () => {
-    expect(findSuspectedSecret('hello world')).toBeNull();
-    expect(findSuspectedSecret('describe("foo", () => { it("works", () => {}); })')).toBeNull();
-    expect(findSuspectedSecret('')).toBeNull();
+    expect(SecretScanner.findIn('hello world')).toBeNull();
+    expect(SecretScanner.findIn('describe("foo", () => { it("works", () => {}); })')).toBeNull();
+    expect(SecretScanner.findIn('')).toBeNull();
   });
 
   it('flags Anthropic API keys (sk-ant-api03-…)', () => {
     const fake = 'sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789ABCDEF12345';
-    const result = findSuspectedSecret(`prefix ${fake} suffix`);
+    const result = SecretScanner.findIn(`prefix ${fake} suffix`);
     expect(result?.name).toBe('anthropic-api-key');
     expect(result?.prefix.startsWith('sk-ant')).toBe(true);
   });
 
   it('flags GitHub classic PATs (ghp_…)', () => {
     const fake = 'ghp_' + 'A'.repeat(40);
-    const result = findSuspectedSecret(`token: ${fake}`);
+    const result = SecretScanner.findIn(`token: ${fake}`);
     expect(result?.name).toBe('github-classic-pat');
   });
 
   it('flags GitHub fine-grained PATs (github_pat_…)', () => {
     const fake = 'github_pat_' + 'B'.repeat(82);
-    expect(findSuspectedSecret(fake)?.name).toBe('github-finegrained-pat');
+    expect(SecretScanner.findIn(fake)?.name).toBe('github-finegrained-pat');
   });
 
   it('flags other GitHub token shapes (gho_, ghs_, ghu_, ghr_)', () => {
-    expect(findSuspectedSecret('gho_' + 'X'.repeat(40))?.name).toBe('github-other-token');
-    expect(findSuspectedSecret('ghs_' + 'X'.repeat(40))?.name).toBe('github-other-token');
+    expect(SecretScanner.findIn('gho_' + 'X'.repeat(40))?.name).toBe('github-other-token');
+    expect(SecretScanner.findIn('ghs_' + 'X'.repeat(40))?.name).toBe('github-other-token');
   });
 
   it('flags AWS access key IDs (AKIA…)', () => {
-    expect(findSuspectedSecret('id=AKIAIOSFODNN7EXAMPLE')?.name).toBe('aws-access-key-id');
+    expect(SecretScanner.findIn('id=AKIAIOSFODNN7EXAMPLE')?.name).toBe('aws-access-key-id');
   });
 
   it('does not match similar-looking strings under the length floor', () => {
-    expect(findSuspectedSecret('sk-ant-api03-tooshort')).toBeNull();
-    expect(findSuspectedSecret('ghp_short')).toBeNull();
+    expect(SecretScanner.findIn('sk-ant-api03-tooshort')).toBeNull();
+    expect(SecretScanner.findIn('ghp_short')).toBeNull();
   });
 
   it('returns the first match when multiple are present', () => {
     const text =
       'leak: sk-ant-api03-' + 'A'.repeat(50) + ' and ghp_' + 'B'.repeat(40);
-    expect(findSuspectedSecret(text)?.name).toBe('anthropic-api-key');
+    expect(SecretScanner.findIn(text)?.name).toBe('anthropic-api-key');
   });
 
   it('is reusable across calls (regex lastIndex hygiene)', () => {
     const fake = 'sk-ant-api03-' + 'C'.repeat(50);
-    expect(findSuspectedSecret(fake)).not.toBeNull();
+    expect(SecretScanner.findIn(fake)).not.toBeNull();
     // Calling again with the same secret must still match — guards against
     // a regex /g flag bug where lastIndex carries over.
-    expect(findSuspectedSecret(fake)).not.toBeNull();
+    expect(SecretScanner.findIn(fake)).not.toBeNull();
   });
 });

@@ -137,7 +137,7 @@ functions. **No math is added by us beyond rounding.**
 | Aggregate + persist a `CoverageReport` | `backend/src/application/usecases/AnalyzeRepositoryCoverage.ts` |
 | Per-file VO (linesPct, hasExistingTest, etc.) | `backend/src/domain/coverage/FileCoverage.ts` |
 | Threshold filter (low-coverage list) | `backend/src/domain/services/CoverageAnalyzer.ts` |
-| Sibling-test detection (`hasExistingTest`) | `backend/src/application/util/findExistingTestPath.ts` |
+| Sibling-test detection (`hasExistingTest`) | `backend/src/infrastructure/workdir/FsSiblingTestPathFinder.ts` (port: `domain/ports/SiblingTestPathFinderPort.ts`) |
 
 ## Limits & known edge cases
 

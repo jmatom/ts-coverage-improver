@@ -115,8 +115,8 @@ Both happen in a **disposable Docker container per job**:
 
 The OS-level guarantees above are real. But the AI container shares its `/workspace` bind-mount with the install/test containers, so a `postinstall` script can plant content (e.g., `CLAUDE.md`) that the AI later reads as project context. Two mitigations are wired into `RunImprovementJob`:
 
-1. **Pre-AI agent-config scrubbing** (`scrubAgentConfig`): drops `CLAUDE.md`, `.claude/`, `.cursor/`, `.aider.*`, `AGENTS.md` from the workdir before each AI invocation.
-2. **Post-AI secret scanning** (`secretGuard`): scans the AI's logs and every written file for known secret shapes (`sk-ant-…`, `ghp_…`, `github_pat_…`, `gho_/u/s/r_…`, `AKIA…`). On match, the attempt fails with `kind: 'security'` and the orchestrator halts immediately — no retry, no sibling fallback, **no push**.
+1. **Pre-AI agent-config scrubbing** (`AgentConfigScrubber.scrub`): drops `CLAUDE.md`, `.claude/`, `.cursor/`, `.aider.*`, `AGENTS.md` from the workdir before each AI invocation.
+2. **Post-AI secret scanning** (`SecretScanner.findIn`): scans the AI's logs and every written file for known secret shapes (`sk-ant-…`, `ghp_…`, `github_pat_…`, `gho_/u/s/r_…`, `AKIA…`). On match, the attempt fails with `kind: 'security'` and the orchestrator halts immediately — no retry, no sibling fallback, **no push**.
 
 Both are documented in `docs/security.md` with the threat model and an empirical-verification recipe.
 

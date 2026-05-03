@@ -1,14 +1,11 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import {
-  candidateTestPaths,
-  findExistingTestPath,
-} from '../../../src/application/util/findExistingTestPath';
+import { FsSiblingTestPathFinder } from '../../../../src/infrastructure/workdir/FsSiblingTestPathFinder';
 
-describe('candidateTestPaths', () => {
+describe('FsSiblingTestPathFinder.candidatesFor', () => {
   it('expands all common conventions for a top-level source file', () => {
-    const cands = candidateTestPaths('foo.ts');
+    const cands = FsSiblingTestPathFinder.candidatesFor('foo.ts');
     expect(cands).toEqual([
       'foo.test.ts',
       'foo.test.tsx',
@@ -22,20 +19,21 @@ describe('candidateTestPaths', () => {
   });
 
   it('keeps the source dir as a prefix for nested files', () => {
-    const cands = candidateTestPaths('src/lib/foo.ts');
+    const cands = FsSiblingTestPathFinder.candidatesFor('src/lib/foo.ts');
     expect(cands).toContain('src/lib/foo.test.ts');
     expect(cands).toContain('src/lib/__tests__/foo.test.ts');
   });
 
   it('strips a variety of source extensions', () => {
-    expect(candidateTestPaths('foo.tsx')[0]).toBe('foo.test.ts');
-    expect(candidateTestPaths('foo.js')[0]).toBe('foo.test.ts');
-    expect(candidateTestPaths('foo.mts')[0]).toBe('foo.test.ts');
-    expect(candidateTestPaths('foo.cts')[0]).toBe('foo.test.ts');
+    expect(FsSiblingTestPathFinder.candidatesFor('foo.tsx')[0]).toBe('foo.test.ts');
+    expect(FsSiblingTestPathFinder.candidatesFor('foo.js')[0]).toBe('foo.test.ts');
+    expect(FsSiblingTestPathFinder.candidatesFor('foo.mts')[0]).toBe('foo.test.ts');
+    expect(FsSiblingTestPathFinder.candidatesFor('foo.cts')[0]).toBe('foo.test.ts');
   });
 });
 
-describe('findExistingTestPath', () => {
+describe('FsSiblingTestPathFinder.findExisting', () => {
+  const finder = new FsSiblingTestPathFinder();
   let workdir: string;
 
   beforeEach(() => {
@@ -53,25 +51,25 @@ describe('findExistingTestPath', () => {
 
   it('returns null when no test file exists', async () => {
     touch('src/foo.ts');
-    await expect(findExistingTestPath(workdir, 'src/foo.ts')).resolves.toBeNull();
+    await expect(finder.findExisting(workdir, 'src/foo.ts')).resolves.toBeNull();
   });
 
   it('finds a sibling .test.ts', async () => {
     touch('src/foo.ts');
     touch('src/foo.test.ts');
-    await expect(findExistingTestPath(workdir, 'src/foo.ts')).resolves.toBe('src/foo.test.ts');
+    await expect(finder.findExisting(workdir, 'src/foo.ts')).resolves.toBe('src/foo.test.ts');
   });
 
   it('finds a sibling .spec.ts', async () => {
     touch('src/foo.ts');
     touch('src/foo.spec.ts');
-    await expect(findExistingTestPath(workdir, 'src/foo.ts')).resolves.toBe('src/foo.spec.ts');
+    await expect(finder.findExisting(workdir, 'src/foo.ts')).resolves.toBe('src/foo.spec.ts');
   });
 
   it('finds __tests__ co-located test', async () => {
     touch('src/lib/foo.ts');
     touch('src/lib/__tests__/foo.test.ts');
-    await expect(findExistingTestPath(workdir, 'src/lib/foo.ts')).resolves.toBe(
+    await expect(finder.findExisting(workdir, 'src/lib/foo.ts')).resolves.toBe(
       'src/lib/__tests__/foo.test.ts',
     );
   });
@@ -79,13 +77,13 @@ describe('findExistingTestPath', () => {
   it('finds top-level test/<name>.test.ts', async () => {
     touch('lib/foo.ts');
     touch('test/foo.test.ts');
-    await expect(findExistingTestPath(workdir, 'lib/foo.ts')).resolves.toBe('test/foo.test.ts');
+    await expect(finder.findExisting(workdir, 'lib/foo.ts')).resolves.toBe('test/foo.test.ts');
   });
 
   it('first match wins (sibling .test.ts beats __tests__)', async () => {
     touch('src/foo.ts');
     touch('src/foo.test.ts');
     touch('src/__tests__/foo.test.ts');
-    await expect(findExistingTestPath(workdir, 'src/foo.ts')).resolves.toBe('src/foo.test.ts');
+    await expect(finder.findExisting(workdir, 'src/foo.ts')).resolves.toBe('src/foo.test.ts');
   });
 });

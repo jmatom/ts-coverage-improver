@@ -3,6 +3,24 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { RunImprovementJob } from '../../../src/application/usecases/RunImprovementJob';
+import { FsAgentConfigScrubber } from '../../../src/infrastructure/workdir/FsAgentConfigScrubber';
+import { FsSiblingTestPathFinder } from '../../../src/infrastructure/workdir/FsSiblingTestPathFinder';
+import { FsTestConventionDetector } from '../../../src/infrastructure/workdir/FsTestConventionDetector';
+
+/**
+ * Helper: instantiate the three workdir-bound port adapters as real
+ * filesystem implementations. The orchestration tests use `mkdtemp` workdirs
+ * with real fixture files, so the Fs adapters operate against isolated
+ * temp dirs and double as integration coverage for the wiring.
+ */
+function workdirPorts() {
+  return {
+    agentConfigScrubber: new FsAgentConfigScrubber(),
+    siblingTestPathFinder: new FsSiblingTestPathFinder(),
+    testConventionDetector: new FsTestConventionDetector(),
+  };
+}
+
 import { ImprovementJob } from '../../../src/domain/job/ImprovementJob';
 import { Repository } from '../../../src/domain/repository/Repository';
 import { CoverageReport } from '../../../src/domain/coverage/CoverageReport';
@@ -314,6 +332,7 @@ describe('RunImprovementJob (orchestration)', () => {
       jobWorkdirRoot: workdir.replace(/\/[^/]+$/, ''),
       githubToken: 'tok',
       resolveAiEnv: () => ({}),
+      ...workdirPorts(),
     });
 
     // Force the workdir to be the one we built
@@ -444,6 +463,7 @@ describe('RunImprovementJob (orchestration)', () => {
       jobWorkdirRoot: root,
       githubToken: 'tok',
       resolveAiEnv: () => ({}),
+      ...workdirPorts(),
     });
 
     await useCase.execute(job.id);
@@ -515,6 +535,7 @@ describe('RunImprovementJob (orchestration)', () => {
       jobWorkdirRoot: root,
       githubToken: 'tok',
       resolveAiEnv: () => ({}),
+      ...workdirPorts(),
     });
 
     await useCase.execute(job.id);
@@ -568,6 +589,7 @@ describe('RunImprovementJob (orchestration)', () => {
       jobWorkdirRoot: root,
       githubToken: 'tok',
       resolveAiEnv: () => ({}),
+      ...workdirPorts(),
     });
 
     await useCase.execute(job.id);
@@ -614,6 +636,7 @@ describe('RunImprovementJob (orchestration)', () => {
       jobWorkdirRoot: root,
       githubToken: 'tok',
       resolveAiEnv: () => ({}),
+      ...workdirPorts(),
     });
 
     await useCase.execute(job.id);
@@ -678,6 +701,7 @@ describe('RunImprovementJob (orchestration)', () => {
       jobWorkdirRoot: root,
       githubToken: 'tok',
       resolveAiEnv: () => ({}),
+      ...workdirPorts(),
     });
 
     await useCase.execute(job.id);
@@ -741,6 +765,7 @@ describe('RunImprovementJob (orchestration)', () => {
       jobWorkdirRoot: root,
       githubToken: 'tok',
       resolveAiEnv: () => ({}),
+      ...workdirPorts(),
     });
 
     await useCase.execute(job.id);
@@ -778,6 +803,7 @@ describe('RunImprovementJob (orchestration)', () => {
       jobWorkdirRoot: '/tmp/dummy',
       githubToken: 'tok',
       resolveAiEnv: () => ({}),
+      ...workdirPorts(),
     });
 
     await useCase.execute(job.id);
@@ -809,6 +835,7 @@ describe('RunImprovementJob (orchestration)', () => {
       jobWorkdirRoot: '/tmp',
       githubToken: 'tok',
       resolveAiEnv: () => ({}),
+      ...workdirPorts(),
     });
 
     await useCase.execute(job.id); // should be a no-op
