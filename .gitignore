@@ -23,9 +23,9 @@ data/*.db-shm
 .DS_Store
 *.log
 
-# Agent / local-machine context: contains absolute paths + workflow notes
-# specific to one developer's environment, not useful to readers.
-CLAUDE.md
+# Per-developer Claude Code settings (model overrides, MCP servers, etc.).
+# CLAUDE.md (shared project context) is tracked; this directory is not.
+.claude/
 
 # Editor / TS / Vite build artifacts that should never be committed
 *.tsbuildinfo

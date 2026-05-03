@@ -1,11 +1,12 @@
-# Project conventions
+# Project context for Claude Code
 
-> Source of truth for project-specific conventions. Read top to bottom on
-> first onboard; consult sections by name once familiar. The "Project
-> conventions" section near the bottom is the load-bearing part — those
-> are the rules that aren't obvious from any single file.
+> Auto-loaded by Claude Code at session start. Source of truth for
+> project-specific conventions. Read top to bottom on first onboard;
+> consult sections by name once familiar. The **Project conventions**
+> section below is the load-bearing part — those are the rules that
+> aren't obvious from any single file.
 
-# Project context
+## What this is
 
 **TS Coverage Improver** — a NestJS service with a React dashboard that
 analyzes a GitHub repository's TypeScript test coverage, runs an AI CLI
