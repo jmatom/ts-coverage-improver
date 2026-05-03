@@ -97,4 +97,69 @@ describe('FrameworkDetector', () => {
     dirs.push(dir);
     expect(() => FrameworkDetector.detect(dir)).toThrow(/c8.*nyc/);
   });
+
+  describe('defaultTestCmd', () => {
+    // Contract: defaultTestCmd is the per-framework default coverage command
+    // and IGNORES the project's scripts.test wrapping. Used by the empty-
+    // suite handling in NpmCoverageRunner where flag pass-through via
+    // `npm test --` is unreliable. testCmd still honors scripts.test for
+    // the hot path; the two fields can diverge by design.
+
+    it('jest: defaultTestCmd is the npx default even when scripts.test wraps coverage', () => {
+      const dir = mkRepo({
+        'package.json': JSON.stringify({
+          scripts: { test: 'jest --coverage' },
+          devDependencies: { jest: '^29.0.0' },
+        }),
+      });
+      dirs.push(dir);
+      const r = FrameworkDetector.detect(dir);
+      expect(r.testCmd).toEqual(['npm', 'test', '--']);
+      expect(r.defaultTestCmd).toContain('jest');
+      expect(r.defaultTestCmd).toContain('--coverage');
+      expect(r.defaultTestCmd).toContain('--coverageReporters=lcovonly');
+    });
+
+    it('vitest: defaultTestCmd ignores scripts.test wrapping', () => {
+      const dir = mkRepo({
+        'package.json': JSON.stringify({
+          scripts: { test: 'vitest run --coverage' },
+          devDependencies: { vitest: '^1.0.0' },
+        }),
+      });
+      dirs.push(dir);
+      const r = FrameworkDetector.detect(dir);
+      expect(r.testCmd).toEqual(['npm', 'test', '--']);
+      expect(r.defaultTestCmd).toContain('vitest');
+      expect(r.defaultTestCmd).toContain('run');
+      expect(r.defaultTestCmd).toContain('--coverage');
+    });
+
+    it('mocha + c8: defaultTestCmd uses c8 + mocha and ignores scripts.test wrapping', () => {
+      const dir = mkRepo({
+        'package.json': JSON.stringify({
+          scripts: { test: 'c8 mocha' },
+          devDependencies: { mocha: '^10', c8: '^9' },
+        }),
+      });
+      dirs.push(dir);
+      const r = FrameworkDetector.detect(dir);
+      expect(r.testCmd).toEqual(['npm', 'test', '--']);
+      expect(r.defaultTestCmd).toContain('c8');
+      expect(r.defaultTestCmd).toContain('mocha');
+      // Wrapper flags must come BEFORE 'mocha' for the empty-suite splice.
+      expect(r.defaultTestCmd[r.defaultTestCmd.length - 1]).toBe('mocha');
+    });
+
+    it('non-wrapping case: testCmd === defaultTestCmd', () => {
+      const dir = mkRepo({
+        'package.json': JSON.stringify({
+          devDependencies: { jest: '^29.0.0' },
+        }),
+      });
+      dirs.push(dir);
+      const r = FrameworkDetector.detect(dir);
+      expect(r.testCmd).toEqual(r.defaultTestCmd);
+    });
+  });
 });
