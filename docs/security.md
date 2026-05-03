@@ -61,7 +61,7 @@ What each call site passes:
 | Phase | Caller | Env injected |
 |---|---|---|
 | Container #1: install + run tests (baseline coverage) | `NpmCoverageRunner.run()` | **No `env` field at all** → empty user-env. The sandbox base image's defaults (PATH etc.) are all the process sees |
-| Container #2: AI invocation | `ClaudeAICli.generateTest()` | `{ ANTHROPIC_API_KEY }` (and `ANTHROPIC_BASE_URL` if optionally set). Resolved by `resolveAiEnv(adapter.requiredEnv, adapter.optionalEnv, processEnv)` — only the adapter-declared keys are extracted from `process.env` and forwarded |
+| Container #2: AI invocation | `ClaudeCliTestGenerator.generateTest()` | `{ ANTHROPIC_API_KEY }` (and `ANTHROPIC_BASE_URL` if optionally set). Resolved by `resolveAiEnv(adapter.requiredEnv, adapter.optionalEnv, processEnv)` — only the adapter-declared keys are extracted from `process.env` and forwarded |
 | Container #3: re-run install + tests (post-AI validation) | `NpmCoverageRunner.run()` | Same as #1 — no AI key |
 
 A `postinstall` script running in container #1 sees a `process.env`
@@ -107,7 +107,7 @@ literally three independent containers spawned, run, removed:
 | Phase | Caller | Container lifecycle |
 |---|---|---|
 | 1. Baseline install + test | `NpmCoverageRunner.run()` | `dockerode.createContainer` → `start` → `wait` → **`remove({ force: true })`** |
-| 2. AI invocation | `ClaudeAICli.generateTest()` | A **fresh** container — same image, separate Linux process, separate PID/mount namespace, separate `process.env` |
+| 2. AI invocation | `ClaudeCliTestGenerator.generateTest()` | A **fresh** container — same image, separate Linux process, separate PID/mount namespace, separate `process.env` |
 | 3. Validation install + test | `NpmCoverageRunner.run()` again | Another fresh container |
 
 The attacker's `postinstall` script runs **inside container #1** as a
@@ -307,7 +307,7 @@ because they were never put into its env array.
 |---|---|---|
 | `GITHUB_TOKEN` | Backend `process.env` only | Never enters any sandbox container |
 | `ANTHROPIC_API_KEY` | Backend `process.env`; injected only into the AI-invocation sandbox container | Never enters install/test sandbox containers; never written to workdir or disk |
-| Any other env var | Stays where it is unless an `AICliPort` adapter declares it as `requiredEnv` | Adapter declarations are statically auditable |
+| Any other env var | Stays where it is unless an `TestGenerator` adapter declares it as `requiredEnv` | Adapter declarations are statically auditable |
 
 The principle is **least privilege at every phase boundary**: each
 sandbox container gets only the env vars it actually needs, and the

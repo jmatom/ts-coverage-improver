@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { SupportedTestFramework } from '@domain/ports/AICliPort';
+import { SupportedTestFramework } from '@domain/ports/TestGeneratorPort';
 import {
   MissingMochaCoverageToolError,
   MissingPackageJsonError,

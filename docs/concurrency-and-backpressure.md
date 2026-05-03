@@ -74,7 +74,7 @@ Implementation:
   every `run()` through the sandbox semaphore. `assertReady()` is **not**
   gated — it's a fast health check, gating it would block boot validation
   behind in-flight jobs.
-- `SemaphoreAiAdapter` is the analogous decorator over `AICliPort`,
+- `SemaphoreAiAdapter` is the analogous decorator over `TestGenerator`,
   gating `generateTest()` only.
 
 The wrappers are wired in `app.module.ts`:
@@ -86,7 +86,7 @@ useFactory: (config) => new SemaphoreSandbox(
   new Semaphore(config.maxConcurrentSandboxes),
 ),
 
-provide: TOKENS.AICliPort,
+provide: TOKENS.TestGenerator,
 useFactory: (config, sandbox) => new SemaphoreAiAdapter(
   selectAiAdapter(config.aiCli, sandbox, config.rawEnv),
   new Semaphore(config.maxConcurrentAiCalls),
@@ -100,7 +100,7 @@ How the two semaphores stack:
   held per-call, not per-job — between the install-call and the
   test-call inside `NpmCoverageRunner.run()`, the slot is briefly free.
 - AI invocations additionally acquire an **AI** slot. The path is
-  `SemaphoreAiAdapter.generateTest` (acquires AI) → `ClaudeAICli.
+  `SemaphoreAiAdapter.generateTest` (acquires AI) → `ClaudeCliTestGenerator.
   generateTest` → `this.sandbox.run(...)` → `SemaphoreSandbox.run`
   (acquires sandbox). So an AI call holds **both** slots for its full
   duration. That is the intended behavior: the AI call is itself a

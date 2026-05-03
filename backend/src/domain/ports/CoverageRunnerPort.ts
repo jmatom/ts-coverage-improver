@@ -1,5 +1,5 @@
 import { FileCoverage } from '../coverage/FileCoverage';
-import { SupportedTestFramework } from './AICliPort';
+import { SupportedTestFramework } from './TestGeneratorPort';
 
 export interface CoverageRunInput {
   /** Workdir containing the cloned repo. */

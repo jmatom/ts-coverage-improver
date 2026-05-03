@@ -1,10 +1,10 @@
 import { simpleGit } from 'simple-git';
-import { AICliPort, GenerateTestInput, GenerateTestOutput } from '@domain/ports/AICliPort';
+import { TestGenerator, GenerateTestInput, GenerateTestOutput } from '@domain/ports/TestGeneratorPort';
 import { SandboxPort } from '@domain/ports/SandboxPort';
 import { buildTestGenerationPrompt } from './prompt';
 
 /**
- * AICliPort implementation backed by Claude Code (`claude -p` headless mode).
+ * TestGenerator implementation backed by Claude Code (`claude -p` headless mode).
  *
  * Contract surface:
  *  - `requiredEnv = ['ANTHROPIC_API_KEY']` — adapter never reads process.env;
@@ -23,7 +23,7 @@ import { buildTestGenerationPrompt } from './prompt';
  * `RunImprovementJob` after this method returns. The adapter's only job is
  * "hand the prompt to the CLI and report back which files were written."
  */
-export class ClaudeAICli implements AICliPort {
+export class ClaudeCliTestGenerator implements TestGenerator {
   readonly id = 'claude';
   readonly requiredEnv = ['ANTHROPIC_API_KEY'] as const;
   readonly optionalEnv = ['ANTHROPIC_BASE_URL'] as const;

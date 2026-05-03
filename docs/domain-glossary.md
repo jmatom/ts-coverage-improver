@@ -69,7 +69,7 @@ Interfaces in `backend/src/domain/ports/` that infra adapters implement. Applica
 | `GitHubPort` | `OctokitGitHub` | Fork (idempotent), open PR, repo metadata |
 | `GitPort` | `SimpleGit` | Host-side clone + commit-and-push |
 | `SandboxPort` | `DockerSandbox` | Run a command inside an isolated container with workdir mounted |
-| `AICliPort` | `ClaudeAICli` | Generate test code; the "via any AI CLI" seam |
+| `TestGenerator` | `ClaudeCliTestGenerator` | Generate test code; the "via any AI CLI" seam |
 | `CoverageRunnerPort` | `NpmCoverageRunner` | Detect framework + run install + tests + parse lcov |
 | `RepositoryRepository` | `SqliteRepositoryRepository` | Persist `Repository` aggregates |
 | `CoverageReportRepository` | `SqliteCoverageReportRepository` | Persist `CoverageReport` aggregates |

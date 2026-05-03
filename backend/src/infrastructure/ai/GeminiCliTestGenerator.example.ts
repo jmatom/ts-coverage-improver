@@ -4,14 +4,14 @@
  * This file is the documented seam for "via any AI CLI" — a working sketch
  * of what a second adapter looks like. It demonstrates:
  *
- *   1. The same `AICliPort` contract — same input/output shape.
+ *   1. The same `TestGenerator` contract — same input/output shape.
  *   2. A different `requiredEnv` (Gemini uses `GEMINI_API_KEY`, not Anthropic's).
  *   3. A different CLI binary invocation.
  *   4. The same post-run file discovery via `git status --porcelain`,
  *      because that strategy is CLI-agnostic.
  *
  * To enable in production:
- *   1. Rename to `GeminiCliAdapter.ts` (drop the `.example` suffix).
+ *   1. Rename to `GeminiCliTestGenerator.ts` (drop the `.example` suffix).
  *   2. Add the Gemini CLI install line to `sandbox/Dockerfile`.
  *   3. Register it in `AiModule` and set `AI_CLI=gemini` + `GEMINI_API_KEY`.
  *
@@ -20,14 +20,14 @@
 
 import { simpleGit } from 'simple-git';
 import {
-  AICliPort,
+  TestGenerator,
   GenerateTestInput,
   GenerateTestOutput,
-} from '@domain/ports/AICliPort';
+} from '@domain/ports/TestGeneratorPort';
 import { SandboxPort } from '@domain/ports/SandboxPort';
 import { buildTestGenerationPrompt } from './prompt';
 
-export class GeminiCliAdapter implements AICliPort {
+export class GeminiCliTestGenerator implements TestGenerator {
   readonly id = 'gemini';
   readonly requiredEnv = ['GEMINI_API_KEY'] as const;
   readonly optionalEnv = [] as const;

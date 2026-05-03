@@ -21,7 +21,7 @@ import { InMemoryPerRepoQueue } from '@infrastructure/queue/InMemoryPerRepoQueue
 import { Semaphore } from '@infrastructure/concurrency/Semaphore';
 import { SemaphoreSandbox } from '@infrastructure/concurrency/SemaphoreSandbox';
 import { SemaphoreAiAdapter } from '@infrastructure/concurrency/SemaphoreAiAdapter';
-import { AICliPort } from '@domain/ports/AICliPort';
+import { TestGenerator } from '@domain/ports/TestGeneratorPort';
 import { RegisterRepository } from '@application/usecases/RegisterRepository';
 import { ListRepositories } from '@application/usecases/ListRepositories';
 import { ListLowCoverageFiles } from '@application/usecases/ListLowCoverageFiles';
@@ -148,8 +148,8 @@ import { ConfigController } from './ConfigController';
       useFactory: () => new FsTestConventionDetector(),
     },
     {
-      provide: TOKENS.AICliPort,
-      useFactory: (config: AppConfig, sandbox: SandboxPort): AICliPort => {
+      provide: TOKENS.TestGenerator,
+      useFactory: (config: AppConfig, sandbox: SandboxPort): TestGenerator => {
         const adapter = selectAiAdapter(config.aiCli, sandbox, config.rawEnv);
         new Logger('AiModule').log(
           `Selected AI adapter: ${adapter.id} (requires: ${adapter.requiredEnv.join(', ')})`,
@@ -203,7 +203,7 @@ import { ConfigController } from './ConfigController';
         TOKENS.CoverageReportRepository,
         TOKENS.GitHubPort,
         TOKENS.GitPort,
-        TOKENS.AICliPort,
+        TOKENS.TestGenerator,
         TOKENS.CoverageRunnerPort,
         TOKENS.TestSuiteValidator,
         TOKENS.AgentConfigScrubber,

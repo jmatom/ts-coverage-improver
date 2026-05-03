@@ -82,9 +82,9 @@ A few minutes of demo costs roughly $0.10 in Anthropic credits.
   injected per phase. See [docs/security.md](docs/security.md).
 - **Frontend.** Vite + React + Tailwind + custom shadcn-style
   components (Radix primitives for Dialog/Tooltip/DropdownMenu).
-- **AI seam.** Behind an `AICliPort` interface; one adapter shipped
-  (`ClaudeAICli`), one example sketched
-  (`GeminiCliAdapter.example.ts`). Adding a new CLI is a single new
+- **AI seam.** Behind an `TestGenerator` interface; one adapter shipped
+  (`ClaudeCliTestGenerator`), one example sketched
+  (`GeminiCliTestGenerator.example.ts`). Adding a new CLI is a single new
   file plus a registry entry.
 
 The orchestration heart is `RunImprovementJob` — fast-fail gates

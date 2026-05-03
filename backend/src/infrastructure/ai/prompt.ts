@@ -1,6 +1,6 @@
 import { readFile, access } from 'node:fs/promises';
 import { join } from 'node:path';
-import { GenerateTestInput } from '@domain/ports/AICliPort';
+import { GenerateTestInput } from '@domain/ports/TestGeneratorPort';
 
 /**
  * Build the test-generation prompt that we hand to any AI CLI adapter.
