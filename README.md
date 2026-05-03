@@ -7,6 +7,16 @@ result through three safety gates, and opens a fork-and-PR upstream.
 
 ![Coverage Improver flow — clone, spawn sandbox, AI invocation, validate, open PR](docs/assets/flow.svg)
 
+## Demo
+
+[![TypeScript Coverage Improver — demo (~3 min)](https://img.youtube.com/vi/LGqJd7-IKx8/maxresdefault.jpg)](https://youtu.be/LGqJd7-IKx8)
+
+End-to-end walkthrough: register a no-tests TS repo, watch the analyzer
+populate the coverage table, click Improve on a low-coverage file, see
+the per-job log stream, land on the live PR upstream. Driven against
+the [`jmatom/ts-coverage-demo`](https://github.com/jmatom/ts-coverage-demo)
+calculator project.
+
 > **AI policy compliance.** Generated tests pass through three gates
 > before becoming a PR: AST safety (no pre-existing test deleted or
 > renamed; at least one new test added; file parses), full test-suite

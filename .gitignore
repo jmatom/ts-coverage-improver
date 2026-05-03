@@ -31,3 +31,7 @@ data/*.db-shm
 *.tsbuildinfo
 frontend/vite.config.js
 frontend/vite.config.d.ts
+
+# Local demo video artifact (hosted on YouTube; see README)
+*.mp4
+*.mov
