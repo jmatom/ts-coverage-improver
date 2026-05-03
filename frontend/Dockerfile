@@ -3,7 +3,7 @@
 # The nginx config proxies `/api/*` to the backend service so the dashboard
 # code can keep calling relative URLs in both dev and prod.
 
-FROM node:20-slim AS build
+FROM node:24-slim AS build
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
