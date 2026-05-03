@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { join } from 'node:path';
 import { CoverageReport } from '@domain/coverage/CoverageReport';
 import { Repository } from '@domain/repository/Repository';
@@ -40,6 +41,7 @@ export interface AnalyzeRepositoryCoverageDeps {
  * that want to bypass the queue.
  */
 export class AnalyzeRepositoryCoverage {
+  private readonly logger = new Logger('AnalyzeRepositoryCoverage');
   constructor(private readonly deps: AnalyzeRepositoryCoverageDeps) {}
 
   async execute(input: { repositoryId: string }): Promise<{ commitSha: string; fileCount: number }> {
@@ -87,6 +89,13 @@ export class AnalyzeRepositoryCoverage {
     // implementation may opt to reuse a committed coverage/lcov.info or
     // run install+tests in the sandbox. The application doesn't care.
     const result = await this.deps.coverageRunner.run({ workdir: packageRoot });
+    // Surface the runner's progress lines (framework, Node version, install /
+    // test exit + duration) on the backend's stdout. Analyses don't have a
+    // per-row log channel today; this at least makes the decisions visible
+    // via `docker compose logs backend`.
+    for (const line of result.logs.split('\n').filter((l) => l.trim() !== '')) {
+      this.logger.log(`[${repo.fullName}] ${line}`);
+    }
 
     // Enrich each FileCoverage with `hasExistingTest`. The lcov payload alone
     // can't tell us this; we probe the freshly-cloned package root for sibling

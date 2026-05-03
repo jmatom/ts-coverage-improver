@@ -438,6 +438,12 @@ export class RunImprovementJob implements JobExecutor {
     } catch (e) {
       return fail(`Test run failed: ${(e as Error).message}`, 'behavioral');
     }
+    // Surface the runner's progress lines (Node version, install/test exit +
+    // duration) into the per-job log so the user can see exactly what
+    // runtime the validation pass used.
+    for (const line of result.logs.split('\n').filter((l) => l.trim() !== '')) {
+      await params.log(`[runner] ${line}`);
+    }
     const newFileCov = result.files.find((f) => f.path === params.job.targetFilePath);
     if (!newFileCov) {
       return fail(
