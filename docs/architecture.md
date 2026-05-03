@@ -256,5 +256,5 @@ A few callouts on the sequence:
 
 - [`architecture.mmd`](./architecture.mmd) — the system flowchart
   above, in a standalone `.mmd` file for `mermaid-cli` rendering.
-- The three sequence diagram sources are the ` ```mermaid sequenceDiagram ` blocks above
+- The three sequence diagram sources are the `mermaid sequenceDiagram` blocks above
   (register flow, then analyze flow, then improvement-job flow).
