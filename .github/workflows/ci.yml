@@ -30,10 +30,9 @@ jobs:
         # dead code paths, etc.). Cheap, runs in seconds.
         run: npx tsc --noEmit
 
-      - name: Unit tests
-        # Skip the live DockerSandbox integration test (requires the sandbox
-        # image to be built locally). The integration test guards itself with
-        # an availability check; running the full suite here would either
-        # silently skip or fail depending on CI runner state, so we restrict
-        # to unit tests for predictability.
-        run: npm test -- --testPathPattern='unit'
+      - name: Tests (unit + non-Docker integration)
+        # Excludes only the live DockerSandbox spec, which spawns real
+        # containers via dockerode and needs the sandbox image built. The
+        # SQLite persistence integration tests run against an in-memory DB
+        # (`node:sqlite`, no native deps) and are safe to run in CI.
+        run: npm test -- --testPathIgnorePatterns='DockerSandbox'
