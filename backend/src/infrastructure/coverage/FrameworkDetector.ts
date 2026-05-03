@@ -18,6 +18,13 @@ export interface DetectionResult {
    * already wraps coverage; otherwise falls back to a per-framework default.
    */
   testCmd: string[];
+  /**
+   * The per-framework default coverage command — never honors
+   * `scripts.test`. Used by the empty-suite handling path (where extra
+   * flags like `--passWithNoTests` need to reach the framework binary
+   * directly; they get lost or dropped when routed through `npm test --`).
+   */
+  defaultTestCmd: string[];
 }
 
 /**
@@ -80,8 +87,41 @@ export class FrameworkDetector {
       allDeps,
       packageManager,
     });
+    const defaultTestCmd = FrameworkDetector.defaultCoverageCommand(framework, allDeps);
 
-    return { framework, packageManager, installArgs, testCmd };
+    return { framework, packageManager, installArgs, testCmd, defaultTestCmd };
+  }
+
+  /**
+   * The per-framework default coverage command, ignoring whatever the
+   * project's `scripts.test` does. Public so the runner can use it in
+   * empty-suite mode where flag pass-through via `npm test --` is
+   * unreliable (some scripts strip args or have their own `--`).
+   */
+  static defaultCoverageCommand(
+    framework: SupportedTestFramework,
+    allDeps: Record<string, string>,
+  ): string[] {
+    switch (framework) {
+      case 'jest':
+        return [
+          'npx',
+          '--yes',
+          'jest',
+          '--coverage',
+          '--coverageReporters=lcovonly',
+          '--coverageDirectory=coverage',
+        ];
+      case 'vitest':
+        return ['npx', '--yes', 'vitest', 'run', '--coverage', '--coverage.reporter=lcovonly'];
+      case 'mocha': {
+        const tool = 'c8' in allDeps ? 'c8' : 'nyc' in allDeps ? 'nyc' : null;
+        if (!tool) {
+          throw new MissingMochaCoverageToolError();
+        }
+        return ['npx', '--yes', tool, '--reporter=lcovonly', 'mocha'];
+      }
+    }
   }
 
   /**
@@ -109,25 +149,6 @@ export class FrameworkDetector {
       return runViaPm;
     }
 
-    switch (opts.framework) {
-      case 'jest':
-        return [
-          'npx',
-          '--yes',
-          'jest',
-          '--coverage',
-          '--coverageReporters=lcovonly',
-          '--coverageDirectory=coverage',
-        ];
-      case 'vitest':
-        return ['npx', '--yes', 'vitest', 'run', '--coverage', '--coverage.reporter=lcovonly'];
-      case 'mocha': {
-        const tool = 'c8' in opts.allDeps ? 'c8' : 'nyc' in opts.allDeps ? 'nyc' : null;
-        if (!tool) {
-          throw new MissingMochaCoverageToolError();
-        }
-        return ['npx', '--yes', tool, '--reporter=lcovonly', 'mocha'];
-      }
-    }
+    return FrameworkDetector.defaultCoverageCommand(opts.framework, opts.allDeps);
   }
 }

@@ -75,23 +75,30 @@ export class NpmCoverageRunner implements CoverageRunnerPort {
     let testCmd = detection.testCmd;
     if (!(await hasAnyTestFile(input.workdir))) {
       const flags = emptySuiteFlags(detection.framework);
+      // Bypass the project's `scripts.test` entirely in empty-suite mode.
+      // Routing extra flags via `npm test --` is unreliable: some scripts
+      // (react-scripts, custom wrappers) strip unknown args or have their
+      // own `--` that breaks pass-through. The per-framework default
+      // command lets us hand the flags directly to the framework binary.
+      const baseCmd = detection.defaultTestCmd;
       if (detection.framework === 'mocha') {
         // Mocha doesn't need a placeholder (exits 0 on empty suites). Its
         // empty-suite flags target the *wrapper* (nyc or c8), so they must
         // be spliced BEFORE the `mocha` binary in the argv — not appended
         // after it like the jest/vitest case below.
-        const mochaIdx = detection.testCmd.lastIndexOf('mocha');
+        const mochaIdx = baseCmd.lastIndexOf('mocha');
         testCmd = [
-          ...detection.testCmd.slice(0, mochaIdx),
+          ...baseCmd.slice(0, mochaIdx),
           ...flags,
-          ...detection.testCmd.slice(mochaIdx),
+          ...baseCmd.slice(mochaIdx),
         ];
       } else {
         await writePlaceholderTest(input.workdir, detection.framework);
-        testCmd = [...detection.testCmd, ...flags];
+        testCmd = [...baseCmd, ...flags];
       }
       logs.push(
-        `No tests detected — applied empty-suite handling (${detection.framework})`,
+        `No tests detected — applied empty-suite handling (${detection.framework}). ` +
+          `Using per-framework default command (bypassing scripts.test).`,
       );
     }
 
