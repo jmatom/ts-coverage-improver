@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -10,6 +9,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import { CoverageThreshold } from '@domain/coverage/CoverageThreshold';
 import { RegisterRepository } from '@application/usecases/RegisterRepository';
 import { ListRepositories } from '@application/usecases/ListRepositories';
 import { ListLowCoverageFiles } from '@application/usecases/ListLowCoverageFiles';
@@ -52,12 +52,14 @@ export class RepositoriesController {
     @Query('threshold') threshold?: string,
   ) {
     await this.assertRepoExists(id);
-    const t =
-      threshold !== undefined ? Number(threshold) : this.config.defaultCoverageThreshold;
-    if (!Number.isFinite(t) || t < 0 || t > 100) {
-      throw new BadRequestException('threshold must be in [0, 100]');
-    }
-    return this.listLow.execute({ repositoryId: id, threshold: t });
+    // VO construction at the boundary: throws DomainInvariantError on
+    // invalid input which the global filter maps to HTTP 400. Replaces
+    // the inline `if (t < 0 || t > 100)` check; range-validation now
+    // lives once on `CoverageThreshold` itself.
+    return this.listLow.execute({
+      repositoryId: id,
+      threshold: CoverageThreshold.fromInput(threshold, this.config.defaultCoverageThreshold),
+    });
   }
 
   @Post(':id/refresh')

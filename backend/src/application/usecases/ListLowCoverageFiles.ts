@@ -1,5 +1,6 @@
 import { CoverageReportRepository } from '@domain/ports/CoverageReportRepository';
 import { CoverageAnalyzer } from '@domain/services/CoverageAnalyzer';
+import { CoverageThreshold } from '@domain/coverage/CoverageThreshold';
 import { FileCoverageDto } from '../dto/Dto';
 
 export class ListLowCoverageFiles {
@@ -7,11 +8,11 @@ export class ListLowCoverageFiles {
 
   async execute(input: {
     repositoryId: string;
-    threshold?: number;
+    threshold: CoverageThreshold;
   }): Promise<FileCoverageDto[]> {
     const latest = await this.reports.findLatestByRepository(input.repositoryId);
     if (!latest) return [];
-    const low = CoverageAnalyzer.lowCoverageFiles(latest, input.threshold);
+    const low = CoverageAnalyzer.lowCoverageFiles(latest, input.threshold.value);
     return low.map((f) => ({
       path: f.path,
       linesPct: f.linesPct,
