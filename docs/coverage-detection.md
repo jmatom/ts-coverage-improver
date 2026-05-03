@@ -92,7 +92,7 @@ silently override their setup.
 
 The trade-off: if the project's wrapper happens to emit only non-lcov
 reporters (e.g. `text-summary`), no `coverage/lcov.info` will be produced
-and `NpmTestRunner` raises a clear error ("Coverage report not produced
+and `NpmCoverageRunner` raises a clear error ("Coverage report not produced
 — looked for `coverage/lcov.info`").
 
 ## Why `sum.test.ts` doesn't appear as a coverage row
@@ -132,7 +132,7 @@ functions. **No math is added by us beyond rounding.**
 | Concern | File |
 |---|---|
 | Pick the coverage command | `backend/src/infrastructure/coverage/FrameworkDetector.ts` |
-| Run install + tests in sandbox + parse lcov | `backend/src/infrastructure/coverage/NpmTestRunner.ts` |
+| Run install + tests in sandbox + parse lcov | `backend/src/infrastructure/coverage/NpmCoverageRunner.ts` |
 | Parse lcov format | `backend/src/domain/coverage/LcovParser.ts` |
 | Aggregate + persist a `CoverageReport` | `backend/src/application/usecases/AnalyzeRepositoryCoverage.ts` |
 | Per-file VO (linesPct, hasExistingTest, etc.) | `backend/src/domain/coverage/FileCoverage.ts` |
@@ -145,7 +145,7 @@ functions. **No math is added by us beyond rounding.**
 |---|---|
 | AVA / tap / uvu / Bun's test runner | `UnsupportedTestFrameworkError` at analyze time, with a friendly message listing what test-deps we *did* see |
 | Mocha without c8 or nyc | `MissingMochaCoverageToolError` — "install c8 or nyc as a devDep" |
-| Project's `scripts.test` wraps coverage but the wrapper outputs only non-lcov reporters (e.g. `text-summary`) | `coverage/lcov.info` won't exist → "Coverage report not produced" error from `NpmTestRunner` |
+| Project's `scripts.test` wraps coverage but the wrapper outputs only non-lcov reporters (e.g. `text-summary`) | `coverage/lcov.info` won't exist → "Coverage report not produced" error from `NpmCoverageRunner` |
 | Repo has *both* `jest` and `vitest` declared | Vitest wins (priority order). Rare in practice |
 | Monorepos (nx, turbo, pnpm workspaces) | Supported via the `subpath` field on the Repository aggregate — the user provides the path to the package's `package.json` at registration. Detection then runs against that subdirectory; git operations stay at the clone root. See `Subpath` VO for the path-traversal guard. |
 | Node.js built-in `node:test` runner | Not detected — its coverage flags only emit lcov on Node ≥22 with `--experimental-test-coverage --test-reporter=lcov`. Rare in OSS today |

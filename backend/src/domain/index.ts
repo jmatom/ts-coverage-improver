@@ -18,5 +18,5 @@ export * from './ports/GitPort';
 export * from './ports/TestSuiteValidatorPort';
 export * from './job/testFileNaming';
 export * from './errors/DomainError';
-export * from './ports/AICliPort';
+export * from './ports/TestGeneratorPort';
 export * from './ports/CoverageRunnerPort';

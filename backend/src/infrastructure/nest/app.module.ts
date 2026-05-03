@@ -8,11 +8,11 @@ import { SqliteConnection } from '@infrastructure/persistence/SqliteConnection';
 import { SqliteRepositoryRepository } from '@infrastructure/persistence/SqliteRepositoryRepository';
 import { SqliteCoverageReportRepository } from '@infrastructure/persistence/SqliteCoverageReportRepository';
 import { SqliteJobRepository } from '@infrastructure/persistence/SqliteJobRepository';
-import { OctokitGitHubAdapter } from '@infrastructure/github/OctokitGitHubAdapter';
-import { SimpleGitCloner } from '@infrastructure/git/SimpleGitCloner';
+import { OctokitGitHub } from '@infrastructure/github/OctokitGitHub';
+import { SimpleGit } from '@infrastructure/git/SimpleGit';
 import { DockerSandbox } from '@infrastructure/sandbox/DockerSandbox';
-import { NpmTestRunner } from '@infrastructure/coverage/NpmTestRunner';
-import { AstTestValidator } from '@infrastructure/validation/AstTestValidator';
+import { NpmCoverageRunner } from '@infrastructure/coverage/NpmCoverageRunner';
+import { AstTestSuiteValidator } from '@infrastructure/validation/AstTestSuiteValidator';
 import { FsAgentConfigScrubber } from '@infrastructure/workdir/FsAgentConfigScrubber';
 import { FsSiblingTestPathFinder } from '@infrastructure/workdir/FsSiblingTestPathFinder';
 import { FsTestConventionDetector } from '@infrastructure/workdir/FsTestConventionDetector';
@@ -21,7 +21,7 @@ import { InMemoryPerRepoQueue } from '@infrastructure/queue/InMemoryPerRepoQueue
 import { Semaphore } from '@infrastructure/concurrency/Semaphore';
 import { SemaphoreSandbox } from '@infrastructure/concurrency/SemaphoreSandbox';
 import { SemaphoreAiAdapter } from '@infrastructure/concurrency/SemaphoreAiAdapter';
-import { AICliPort } from '@domain/ports/AICliPort';
+import { TestGenerator } from '@domain/ports/TestGeneratorPort';
 import { RegisterRepository } from '@application/usecases/RegisterRepository';
 import { ListRepositories } from '@application/usecases/ListRepositories';
 import { ListLowCoverageFiles } from '@application/usecases/ListLowCoverageFiles';
@@ -101,12 +101,12 @@ import { ConfigController } from './ConfigController';
     // Outbound adapters
     {
       provide: TOKENS.GitHubPort,
-      useFactory: (config: AppConfig) => new OctokitGitHubAdapter(config.githubToken),
+      useFactory: (config: AppConfig) => new OctokitGitHub(config.githubToken),
       inject: [TOKENS.Config],
     },
     {
       provide: TOKENS.GitPort,
-      useFactory: () => new SimpleGitCloner(),
+      useFactory: () => new SimpleGit(),
     },
     {
       provide: TOKENS.SandboxPort,
@@ -125,12 +125,12 @@ import { ConfigController } from './ConfigController';
     },
     {
       provide: TOKENS.CoverageRunnerPort,
-      useFactory: (sandbox: DockerSandbox) => new NpmTestRunner(sandbox),
+      useFactory: (sandbox: DockerSandbox) => new NpmCoverageRunner(sandbox),
       inject: [TOKENS.SandboxPort],
     },
     {
       provide: TOKENS.TestSuiteValidator,
-      useFactory: () => new AstTestValidator(),
+      useFactory: () => new AstTestSuiteValidator(),
     },
     // Workdir-bound port adapters — pure fs operations behind ports so
     // the use cases stay free of `node:fs` knowledge and tests can swap
@@ -148,8 +148,8 @@ import { ConfigController } from './ConfigController';
       useFactory: () => new FsTestConventionDetector(),
     },
     {
-      provide: TOKENS.AICliPort,
-      useFactory: (config: AppConfig, sandbox: SandboxPort): AICliPort => {
+      provide: TOKENS.TestGenerator,
+      useFactory: (config: AppConfig, sandbox: SandboxPort): TestGenerator => {
         const adapter = selectAiAdapter(config.aiCli, sandbox, config.rawEnv);
         new Logger('AiModule').log(
           `Selected AI adapter: ${adapter.id} (requires: ${adapter.requiredEnv.join(', ')})`,
@@ -170,11 +170,11 @@ import { ConfigController } from './ConfigController';
         jobs: SqliteJobRepository,
         repos: SqliteRepositoryRepository,
         reports: SqliteCoverageReportRepository,
-        github: OctokitGitHubAdapter,
-        git: SimpleGitCloner,
+        github: OctokitGitHub,
+        git: SimpleGit,
         ai: ReturnType<typeof selectAiAdapter>,
-        coverageRunner: NpmTestRunner,
-        validator: AstTestValidator,
+        coverageRunner: NpmCoverageRunner,
+        validator: AstTestSuiteValidator,
         agentConfigScrubber: FsAgentConfigScrubber,
         siblingTestPathFinder: FsSiblingTestPathFinder,
         testConventionDetector: FsTestConventionDetector,
@@ -203,7 +203,7 @@ import { ConfigController } from './ConfigController';
         TOKENS.CoverageReportRepository,
         TOKENS.GitHubPort,
         TOKENS.GitPort,
-        TOKENS.AICliPort,
+        TOKENS.TestGenerator,
         TOKENS.CoverageRunnerPort,
         TOKENS.TestSuiteValidator,
         TOKENS.AgentConfigScrubber,
@@ -231,7 +231,7 @@ import { ConfigController } from './ConfigController';
     // Use cases
     {
       provide: RegisterRepository,
-      useFactory: (repos: SqliteRepositoryRepository, github: OctokitGitHubAdapter) =>
+      useFactory: (repos: SqliteRepositoryRepository, github: OctokitGitHub) =>
         new RegisterRepository(repos, github),
       inject: [TOKENS.RepositoryRepository, TOKENS.GitHubPort],
     },
@@ -253,8 +253,8 @@ import { ConfigController } from './ConfigController';
       useFactory: (
         repos: SqliteRepositoryRepository,
         reports: SqliteCoverageReportRepository,
-        git: SimpleGitCloner,
-        runner: NpmTestRunner,
+        git: SimpleGit,
+        runner: NpmCoverageRunner,
         siblingTestPathFinder: FsSiblingTestPathFinder,
         config: AppConfig,
       ) =>

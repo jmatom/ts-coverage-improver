@@ -60,9 +60,9 @@ What each call site passes:
 
 | Phase | Caller | Env injected |
 |---|---|---|
-| Container #1: install + run tests (baseline coverage) | `NpmTestRunner.run()` | **No `env` field at all** → empty user-env. The sandbox base image's defaults (PATH etc.) are all the process sees |
-| Container #2: AI invocation | `ClaudeCodeAdapter.generateTest()` | `{ ANTHROPIC_API_KEY }` (and `ANTHROPIC_BASE_URL` if optionally set). Resolved by `resolveAiEnv(adapter.requiredEnv, adapter.optionalEnv, processEnv)` — only the adapter-declared keys are extracted from `process.env` and forwarded |
-| Container #3: re-run install + tests (post-AI validation) | `NpmTestRunner.run()` | Same as #1 — no AI key |
+| Container #1: install + run tests (baseline coverage) | `NpmCoverageRunner.run()` | **No `env` field at all** → empty user-env. The sandbox base image's defaults (PATH etc.) are all the process sees |
+| Container #2: AI invocation | `ClaudeCliTestGenerator.generateTest()` | `{ ANTHROPIC_API_KEY }` (and `ANTHROPIC_BASE_URL` if optionally set). Resolved by `resolveAiEnv(adapter.requiredEnv, adapter.optionalEnv, processEnv)` — only the adapter-declared keys are extracted from `process.env` and forwarded |
+| Container #3: re-run install + tests (post-AI validation) | `NpmCoverageRunner.run()` | Same as #1 — no AI key |
 
 A `postinstall` script running in container #1 sees a `process.env`
 that **does not contain `ANTHROPIC_API_KEY` nor `GITHUB_TOKEN`**. It
@@ -106,9 +106,9 @@ literally three independent containers spawned, run, removed:
 
 | Phase | Caller | Container lifecycle |
 |---|---|---|
-| 1. Baseline install + test | `NpmTestRunner.run()` | `dockerode.createContainer` → `start` → `wait` → **`remove({ force: true })`** |
-| 2. AI invocation | `ClaudeCodeAdapter.generateTest()` | A **fresh** container — same image, separate Linux process, separate PID/mount namespace, separate `process.env` |
-| 3. Validation install + test | `NpmTestRunner.run()` again | Another fresh container |
+| 1. Baseline install + test | `NpmCoverageRunner.run()` | `dockerode.createContainer` → `start` → `wait` → **`remove({ force: true })`** |
+| 2. AI invocation | `ClaudeCliTestGenerator.generateTest()` | A **fresh** container — same image, separate Linux process, separate PID/mount namespace, separate `process.env` |
+| 3. Validation install + test | `NpmCoverageRunner.run()` again | Another fresh container |
 
 The attacker's `postinstall` script runs **inside container #1** as a
 process. When that container is destroyed, that process is dead. There
@@ -285,9 +285,9 @@ To prove env isolation experimentally:
 docker compose exec backend env | grep -E "ANTHROPIC_API_KEY|GITHUB_TOKEN"
 # → both present
 
-# 2. Spawn a sandbox with the same image NpmTestRunner uses, mimicking
+# 2. Spawn a sandbox with the same image NpmCoverageRunner uses, mimicking
 #    the install phase. We pass NO env array — exactly what
-#    NpmTestRunner.run() does for install/test phases.
+#    NpmCoverageRunner.run() does for install/test phases.
 #    On Apple Silicon, add `--platform linux/arm64` (or whatever your
 #    image was built for) since `docker run` defaults to the daemon's
 #    native arch which may differ from the compose-built image:
@@ -307,7 +307,7 @@ because they were never put into its env array.
 |---|---|---|
 | `GITHUB_TOKEN` | Backend `process.env` only | Never enters any sandbox container |
 | `ANTHROPIC_API_KEY` | Backend `process.env`; injected only into the AI-invocation sandbox container | Never enters install/test sandbox containers; never written to workdir or disk |
-| Any other env var | Stays where it is unless an `AICliPort` adapter declares it as `requiredEnv` | Adapter declarations are statically auditable |
+| Any other env var | Stays where it is unless an `TestGenerator` adapter declares it as `requiredEnv` | Adapter declarations are statically auditable |
 
 The principle is **least privilege at every phase boundary**: each
 sandbox container gets only the env vars it actually needs, and the

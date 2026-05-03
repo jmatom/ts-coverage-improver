@@ -1,14 +1,14 @@
 import { join } from 'node:path';
-import { SqliteConnection } from '../../../src/infrastructure/persistence/SqliteConnection';
-import { SqliteRepositoryRepository } from '../../../src/infrastructure/persistence/SqliteRepositoryRepository';
-import { SqliteCoverageReportRepository } from '../../../src/infrastructure/persistence/SqliteCoverageReportRepository';
-import { SqliteJobRepository } from '../../../src/infrastructure/persistence/SqliteJobRepository';
-import { Repository } from '../../../src/domain/repository/Repository';
-import { CoverageReport } from '../../../src/domain/coverage/CoverageReport';
-import { FileCoverage } from '../../../src/domain/coverage/FileCoverage';
-import { ImprovementJob } from '../../../src/domain/job/ImprovementJob';
+import { SqliteConnection } from '../../src/infrastructure/persistence/SqliteConnection';
+import { SqliteRepositoryRepository } from '../../src/infrastructure/persistence/SqliteRepositoryRepository';
+import { SqliteCoverageReportRepository } from '../../src/infrastructure/persistence/SqliteCoverageReportRepository';
+import { SqliteJobRepository } from '../../src/infrastructure/persistence/SqliteJobRepository';
+import { Repository } from '../../src/domain/repository/Repository';
+import { CoverageReport } from '../../src/domain/coverage/CoverageReport';
+import { FileCoverage } from '../../src/domain/coverage/FileCoverage';
+import { ImprovementJob } from '../../src/domain/job/ImprovementJob';
 
-const MIGRATIONS_DIR = join(__dirname, '../../../migrations');
+const MIGRATIONS_DIR = join(__dirname, '../../migrations');
 
 const fc = (path: string, linesPct: number, uncovered: number[] = []) =>
   FileCoverage.create({
@@ -468,6 +468,78 @@ describe('SQLite persistence', () => {
       const list = await jobs.listByRepository(r.id);
       expect(list[0].id.value).toBe(j2.id.value);
       expect(list[1].id.value).toBe(j1.id.value);
+    });
+
+    // Direct repo-level coverage of the idempotency-guard query used by
+    // RequestImprovementJob — ensures terminal-status rows don't shadow new
+    // requests. Indirectly tested via use-case specs, but this nails the
+    // SQL contract.
+    it('findInFlightForFile finds non-terminal jobs and ignores terminal ones', async () => {
+      const repos = new SqliteRepositoryRepository(conn.db);
+      const jobs = new SqliteJobRepository(conn.db);
+      const r = Repository.create({ owner: 'o', name: 'n', defaultBranch: 'main' });
+      await repos.save(r);
+
+      // No job for this file yet → null.
+      expect(await jobs.findInFlightForFile(r.id, 'src/foo.ts')).toBeNull();
+
+      // Pending job → found.
+      const pending = ImprovementJob.create({ repositoryId: r.id, targetFilePath: 'src/foo.ts' });
+      await jobs.save(pending);
+      const found = await jobs.findInFlightForFile(r.id, 'src/foo.ts');
+      expect(found?.id.value).toBe(pending.id.value);
+
+      // Same file with the row now in `running` → still found.
+      pending.start(50);
+      await jobs.save(pending);
+      expect((await jobs.findInFlightForFile(r.id, 'src/foo.ts'))?.id.value).toBe(
+        pending.id.value,
+      );
+
+      // Transition to terminal (succeeded) → no longer in-flight.
+      pending.succeed({ prUrl: 'https://x', coverageAfter: 90, mode: 'append' });
+      await jobs.save(pending);
+      expect(await jobs.findInFlightForFile(r.id, 'src/foo.ts')).toBeNull();
+
+      // A different file in the same repo is not aliased.
+      expect(await jobs.findInFlightForFile(r.id, 'src/bar.ts')).toBeNull();
+    });
+
+    // Direct coverage of the source query for queue-depth backpressure
+    // (RequestImprovementJob's admission control).
+    it('countActive counts only pending + running, ignores terminal rows', async () => {
+      const repos = new SqliteRepositoryRepository(conn.db);
+      const jobs = new SqliteJobRepository(conn.db);
+      const r = Repository.create({ owner: 'o', name: 'n', defaultBranch: 'main' });
+      await repos.save(r);
+
+      expect(await jobs.countActive()).toBe(0);
+
+      const pending = ImprovementJob.create({ repositoryId: r.id, targetFilePath: 'a.ts' });
+      const running = ImprovementJob.create({ repositoryId: r.id, targetFilePath: 'b.ts' });
+      const succeeded = ImprovementJob.create({ repositoryId: r.id, targetFilePath: 'c.ts' });
+      const failed = ImprovementJob.create({ repositoryId: r.id, targetFilePath: 'd.ts' });
+      running.start(50);
+      succeeded.start(50);
+      succeeded.succeed({ prUrl: 'https://x', coverageAfter: 90, mode: 'append' });
+      failed.fail('boom');
+      await jobs.save(pending);
+      await jobs.save(running);
+      await jobs.save(succeeded);
+      await jobs.save(failed);
+
+      expect(await jobs.countActive()).toBe(2);
+    });
+  });
+
+  // applyMigrations tracks which versions are applied via the migrations
+  // bookkeeping table. The factory in app.module.ts re-runs it on every
+  // boot; verify a second invocation is a no-op so a restart can never
+  // double-apply DDL.
+  describe('SqliteConnection.applyMigrations', () => {
+    it('is idempotent — second invocation returns no newly-applied migrations', () => {
+      const second = conn.applyMigrations(MIGRATIONS_DIR);
+      expect(second).toEqual([]);
     });
   });
 });

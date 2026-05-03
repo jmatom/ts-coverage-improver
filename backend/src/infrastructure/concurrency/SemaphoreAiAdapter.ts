@@ -1,21 +1,21 @@
 import {
-  AICliPort,
+  TestGenerator,
   GenerateTestInput,
   GenerateTestOutput,
-} from '@domain/ports/AICliPort';
+} from '@domain/ports/TestGeneratorPort';
 import { Semaphore } from './Semaphore';
 
 /**
- * Decorator over `AICliPort` that gates `generateTest` calls behind a
+ * Decorator over `TestGenerator` that gates `generateTest` calls behind a
  * Semaphore. Distinct from the sandbox cap because AI throughput is bounded
  * by the API key's rate limit / billing, not by host capacity.
  *
  * `id`, `requiredEnv`, `optionalEnv` are forwarded so AppModule's adapter
  * registry can still introspect them at boot.
  */
-export class SemaphoreAiAdapter implements AICliPort {
+export class SemaphoreAiAdapter implements TestGenerator {
   constructor(
-    private readonly inner: AICliPort,
+    private readonly inner: TestGenerator,
     private readonly sem: Semaphore,
   ) {}
 

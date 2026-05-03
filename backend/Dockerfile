@@ -27,7 +27,7 @@ RUN apt-get update \
 # The per-job workdirs live under /tmp/coverage-improver-jobs and are bind-
 # mounted from the host. macOS Docker Desktop's file-sharing layer surfaces
 # them with a uid that doesn't match this container's process owner, so
-# git's dubious-ownership safeguard fires when SimpleGitCloner / git
+# git's dubious-ownership safeguard fires when SimpleGit / git
 # status / etc. touch them. This container IS the trust boundary; tell git
 # to trust any path. (The sandbox image has the same line for the same
 # reason.)

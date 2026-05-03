@@ -35,7 +35,7 @@ interface TestBlock {
  *
  * Sibling-mode is a subset: file parses + has at least one `it`/`test`.
  */
-export class AstTestValidator implements TestSuiteValidatorPort {
+export class AstTestSuiteValidator implements TestSuiteValidatorPort {
   /**
    * Cheap syntactic check used by the orchestrator BEFORE the AI runs.
    * If `false`, the existing test file is malformed — the repo is broken
@@ -43,7 +43,7 @@ export class AstTestValidator implements TestSuiteValidatorPort {
    * spending a sandbox spawn.
    */
   parseCheck(filename: string, content: string): ValidationResult {
-    const r = AstTestValidator.tryParse(filename, content);
+    const r = AstTestSuiteValidator.tryParse(filename, content);
     if (!r.ok) {
       return { ok: false, violations: [{ kind: 'parse_error', message: r.error }] };
     }
@@ -51,7 +51,7 @@ export class AstTestValidator implements TestSuiteValidatorPort {
   }
 
   validateNew(filename: string, content: string): ValidationResult {
-    const parse = AstTestValidator.tryParse(filename, content);
+    const parse = AstTestSuiteValidator.tryParse(filename, content);
     if (!parse.ok) {
       return { ok: false, violations: [{ kind: 'parse_error', message: parse.error }] };
     }
@@ -71,7 +71,7 @@ export class AstTestValidator implements TestSuiteValidatorPort {
   }
 
   validateAppend(filename: string, before: string, after: string): ValidationResult {
-    const parsed = AstTestValidator.tryParse(filename, after);
+    const parsed = AstTestSuiteValidator.tryParse(filename, after);
     if (!parsed.ok) {
       return { ok: false, violations: [{ kind: 'parse_error', message: parsed.error }] };
     }

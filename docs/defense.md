@@ -124,10 +124,10 @@ Both are documented in `docs/security.md` with the threat model and an empirical
 
 ## Why the AI is pluggable
 
-The spec says "via **any** AI CLI." That single word drove the whole `AICliPort` abstraction.
+The spec says "via **any** AI CLI." That single word drove the whole `TestGenerator` abstraction.
 
 - **Shipped:** the Claude Code adapter — ~50 lines of code. Knows three things: which env var to require (`ANTHROPIC_API_KEY`), how to invoke `claude -p --output-format json`, and how to discover written files via `git status --porcelain` (CLI-agnostic — works for any AI tool that touches files).
-- **Documented seam:** `GeminiCliAdapter.example.ts` shows the same shape with a different env var (`GEMINI_API_KEY`) and a different binary. Five-step recipe in the README to enable it for real.
+- **Documented seam:** `infrastructure/ai/examples/GeminiCliTestGenerator.ts` shows the same shape with a different env var (`GEMINI_API_KEY`) and a different binary. The `examples/` directory is statically excluded from the wired registry; moving the file up one level plus a registry line enables it.
 
 A second adapter is a one-file addition. **Domain and application layers don't change.** Whatever AI CLI is adopted internally next year, this seam absorbs it.
 
@@ -212,7 +212,7 @@ Every architectural choice traces back to a line in the spec or a real engineeri
 
 | Spec line | Architectural answer |
 | --- | --- |
-| "via any AI CLI" | `AICliPort` interface + adapter registry; one shipped, one example, README recipe |
+| "via any AI CLI" | `TestGenerator` interface + adapter registry; one shipped, one example, README recipe |
 | "third-party TypeScript repositories" (public + private) | Single fork-and-PR code path; PAT-driven |
 | "below 80%" (configurable) | UI threshold slider, default 80, `CoverageAnalyzer` honors it |
 | "minimal web dashboard using React" | Vite + React + Tailwind + shadcn-style components |
@@ -262,7 +262,7 @@ Two scaling axes:
 The test run fails. That's a behavioral failure → no sibling fallback → job ends `failed` with the failed import in the logs. Honest behavior. Future improvement: feed the dep list into the AI's prompt as a constraint.
 
 **Q: A few application-layer files import `Logger` from `@nestjs/common` directly. Doesn't that violate the "no framework imports in domain/application" rule?**
-Yes, deliberately. Logging is a cross-cutting instrumentation concern, not a behavioral dependency — it doesn't change the use case's outcome, it observes it. Ports earn their cost through substitutability; a logger has one prod implementation and no test where we assert on its calls. Adding a `LoggerPort` would dilute the meaning of the real ports (`JobRepository`, `AICliPort`, `SandboxPort` — each with multiple implementations) without improving a single test, so we use `new Logger('Context')` directly and accept the lone framework import as the price. **For a take-home this trade-off was the right call to me**; for a long-lived production codebase where the framework choice itself might be revisited (e.g., migrating off Nest), I'd add a `LoggerPort` adapter so the application layer is genuinely framework-free — ~30 minutes of work and four small files. Happy to add it on request.
+Yes, deliberately. Logging is a cross-cutting instrumentation concern, not a behavioral dependency — it doesn't change the use case's outcome, it observes it. Ports earn their cost through substitutability; a logger has one prod implementation and no test where we assert on its calls. Adding a `LoggerPort` would dilute the meaning of the real ports (`JobRepository`, `TestGenerator`, `SandboxPort` — each with multiple implementations) without improving a single test, so we use `new Logger('Context')` directly and accept the lone framework import as the price. **For a take-home this trade-off was the right call to me**; for a long-lived production codebase where the framework choice itself might be revisited (e.g., migrating off Nest), I'd add a `LoggerPort` adapter so the application layer is genuinely framework-free — ~30 minutes of work and four small files. Happy to add it on request.
 
 ---
 

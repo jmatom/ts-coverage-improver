@@ -109,7 +109,7 @@ async function tryReadFile(path: string): Promise<string | null> {
 
 /**
  * Render a resolution as a single-line job log entry. Centralized here so
- * the wording stays consistent across NpmTestRunner and any future caller
+ * the wording stays consistent across NpmCoverageRunner and any future caller
  * (if other phases ever need to surface the same info).
  */
 export function describeNodeVersion(res: NodeVersionResolution): string {

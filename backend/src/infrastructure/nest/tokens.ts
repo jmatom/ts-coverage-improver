@@ -10,7 +10,7 @@ export const TOKENS = {
   GitHubPort: 'GitHubPort',
   GitPort: 'GitPort',
   SandboxPort: 'SandboxPort',
-  AICliPort: 'AICliPort',
+  TestGenerator: 'TestGenerator',
   CoverageRunnerPort: 'CoverageRunnerPort',
   TestSuiteValidator: 'TestSuiteValidator',
   AgentConfigScrubber: 'AgentConfigScrubber',

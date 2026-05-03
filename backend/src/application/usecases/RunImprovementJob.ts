@@ -12,7 +12,7 @@ import { RepositoryRepository } from '@domain/ports/RepositoryRepository';
 import { CoverageReportRepository } from '@domain/ports/CoverageReportRepository';
 import { GitHubPort } from '@domain/ports/GitHubPort';
 import { GitPort } from '@domain/ports/GitPort';
-import { AICliPort, SupportedTestFramework } from '@domain/ports/AICliPort';
+import { TestGenerator, SupportedTestFramework } from '@domain/ports/TestGeneratorPort';
 import { CoverageRunnerPort } from '@domain/ports/CoverageRunnerPort';
 import { TestSuiteValidatorPort } from '@domain/ports/TestSuiteValidatorPort';
 import { AgentConfigScrubberPort } from '@domain/ports/AgentConfigScrubberPort';
@@ -26,7 +26,7 @@ export interface RunImprovementJobDeps {
   reports: CoverageReportRepository;
   github: GitHubPort;
   git: GitPort;
-  ai: AICliPort;
+  ai: TestGenerator;
   coverageRunner: CoverageRunnerPort;
   validator: TestSuiteValidatorPort;
   agentConfigScrubber: AgentConfigScrubberPort;
@@ -370,7 +370,7 @@ export class RunImprovementJob implements JobExecutor {
     }
 
     // Normalize: strip a leading `<subpath>/` from each written path so all
-    // paths are package-root-relative. ClaudeCodeAdapter's `diffWrittenFiles`
+    // paths are package-root-relative. ClaudeCliTestGenerator's `diffWrittenFiles`
     // resolves git paths against the repo root (cloneRoot), so for monorepos
     // we get back e.g. 'backend/src/foo.test.ts' even though the AI sees
     // /workspace = packageRoot.

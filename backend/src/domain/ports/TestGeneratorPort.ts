@@ -43,19 +43,30 @@ export interface GenerateTestOutput {
 }
 
 /**
- * Port for AI CLI integration. The "documented seam" satisfying the spec line
- * "via any AI CLI" — adapters live in infrastructure/ai/.
+ * Port for "given a source file + uncovered lines + framework, produce test
+ * code." Implementations live in `infrastructure/ai/` — today: Claude Code
+ * via headless CLI in a sandbox; the example sketch shows Gemini CLI
+ * following the same shape. Other deliveries (in-process LLM SDK, hosted
+ * API, deterministic codegen) would also fit if they implement this method.
  *
- * Each adapter declares its required env vars statically so the orchestrator
- * can validate presence at boot and inject them into the sandbox container at
- * job time. Adapters never read process.env directly.
+ * The `requiredEnv` / `optionalEnv` fields are a CLI-shaped concession: they
+ * exist so the orchestrator can validate presence of the adapter's secrets
+ * at boot and inject the right subset into the per-job sandbox container.
+ * A non-CLI adapter (e.g. an in-process SDK call) wouldn't need either —
+ * it'd read its credentials directly at construction time. We keep these
+ * fields on the port to avoid a parallel registry of "which adapters need
+ * sandbox env injection"; the cost is one CLI assumption leaking into the
+ * generic interface. Acceptable trade for take-home scope.
  */
-export interface AICliPort {
+export interface TestGenerator {
   /** Stable identifier for this adapter, e.g. 'claude', 'gemini'. */
   readonly id: string;
-  /** Env var names the adapter requires the sandbox to inject. */
+  /**
+   * Env var names a sandbox-shelling adapter requires the orchestrator to
+   * forward into the per-job container. Non-sandbox adapters return `[]`.
+   */
   readonly requiredEnv: readonly string[];
-  /** Env var names the adapter may use if present. */
+  /** Env var names a sandbox-shelling adapter may use if present. Non-sandbox adapters return `[]`. */
   readonly optionalEnv: readonly string[];
 
   generateTest(input: GenerateTestInput): Promise<GenerateTestOutput>;

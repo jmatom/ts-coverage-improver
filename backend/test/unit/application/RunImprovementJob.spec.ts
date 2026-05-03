@@ -31,7 +31,7 @@ import { JobStatus } from '../../../src/domain/job/JobStatus';
 import {
   GenerateTestInput,
   GenerateTestOutput,
-} from '../../../src/domain/ports/AICliPort';
+} from '../../../src/domain/ports/TestGeneratorPort';
 
 /**
  * Orchestration test: drives `RunImprovementJob` through its full state

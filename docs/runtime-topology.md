@@ -213,7 +213,7 @@ the backend's own `process.env`.
 | Phase | env injected |
 |---|---|
 | Container #1: install + test (baseline) | None of the AI / GitHub secrets. Only neutral vars (`NODE_ENV`, `CI=true`, etc.) if needed |
-| Container #2: AI invoke | `ANTHROPIC_API_KEY` (or whichever the selected `AICliPort` adapter declares as `requiredEnv`) |
+| Container #2: AI invoke | `ANTHROPIC_API_KEY` (or whichever the selected `TestGenerator` adapter declares as `requiredEnv`) |
 | Container #3: re-run install + test (validation) | Same as #1 — no AI key |
 
 A `postinstall` script running in container #1 sees a `process.env`
@@ -304,7 +304,7 @@ Backend's per-repo queue worker (background promise, not request-bound)
        └─ host: simple-git clone
        └─ dockerode.createContainer → container #1 → install+test (baseline)
        └─ dockerode.createContainer → container #2 → AI invocation
-       └─ AstTestValidator (in-process)
+       └─ AstTestSuiteValidator (in-process)
        └─ dockerode.createContainer → container #3 → re-test (validation)
        └─ Octokit: ensureFork + pushBranch + openPullRequest
        └─ SQLite: job.markSucceeded(prUrl, before, after)

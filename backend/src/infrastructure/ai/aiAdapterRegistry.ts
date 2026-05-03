@@ -1,6 +1,6 @@
-import { AICliPort } from '@domain/ports/AICliPort';
+import { TestGenerator } from '@domain/ports/TestGeneratorPort';
 import { SandboxPort } from '@domain/ports/SandboxPort';
-import { ClaudeCodeAdapter } from './ClaudeCodeAdapter';
+import { ClaudeCliTestGenerator } from './ClaudeCliTestGenerator';
 
 /**
  * Adapter registry for the "via any AI CLI" seam.
@@ -12,19 +12,20 @@ import { ClaudeCodeAdapter } from './ClaudeCodeAdapter';
  * the chosen adapter's `requiredEnv` keys are populated at boot, so the app
  * fails fast if the operator forgot to set credentials.
  */
-const REGISTRY: Record<string, (sandbox: SandboxPort) => AICliPort> = {
-  claude: (s) => new ClaudeCodeAdapter(s),
+const REGISTRY: Record<string, (sandbox: SandboxPort) => TestGenerator> = {
+  claude: (s) => new ClaudeCliTestGenerator(s),
   // To enable Gemini in production:
-  //   1. Rename GeminiCliAdapter.example.ts → GeminiCliAdapter.ts
-  //   2. Add `gemini: (s) => new GeminiCliAdapter(s),` here
-  //   3. Add the gemini CLI install line to sandbox/Dockerfile
+  //   1. Move infrastructure/ai/examples/GeminiCliTestGenerator.ts up one
+  //      directory to infrastructure/ai/.
+  //   2. Add `gemini: (s) => new GeminiCliTestGenerator(s),` here.
+  //   3. Add the gemini CLI install line to sandbox/Dockerfile.
 };
 
 export function selectAiAdapter(
   id: string,
   sandbox: SandboxPort,
   env: NodeJS.ProcessEnv,
-): AICliPort {
+): TestGenerator {
   const factory = REGISTRY[id.toLowerCase()];
   if (!factory) {
     throw new Error(
