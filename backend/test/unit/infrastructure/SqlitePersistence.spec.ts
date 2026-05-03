@@ -16,7 +16,6 @@ const fc = (path: string, linesPct: number, uncovered: number[] = []) =>
     linesPct,
     branchesPct: null,
     functionsPct: null,
-    statementsPct: null,
     uncoveredLines: uncovered,
   });
 
@@ -179,7 +178,6 @@ describe('SQLite persistence', () => {
         linesPct: 60,
         branchesPct: null,
         functionsPct: null,
-        statementsPct: null,
         uncoveredLines: [],
         hasExistingTest: true,
       });
@@ -188,7 +186,6 @@ describe('SQLite persistence', () => {
         linesPct: 0,
         branchesPct: null,
         functionsPct: null,
-        statementsPct: null,
         uncoveredLines: [],
         hasExistingTest: false,
       });

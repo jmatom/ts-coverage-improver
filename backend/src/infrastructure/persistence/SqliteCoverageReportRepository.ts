@@ -15,7 +15,6 @@ interface FileRow {
   lines_pct: number;
   branches_pct: number | null;
   functions_pct: number | null;
-  statements_pct: number | null;
   uncovered_lines: string;
   has_existing_test: number | null;
 }
@@ -31,13 +30,12 @@ export class SqliteCoverageReportRepository implements CoverageReportRepository 
     );
     const insertFile = this.db.prepare(
       `INSERT INTO file_coverages
-         (report_id, path, lines_pct, branches_pct, functions_pct, statements_pct, uncovered_lines, has_existing_test)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         (report_id, path, lines_pct, branches_pct, functions_pct, uncovered_lines, has_existing_test)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(report_id, path) DO UPDATE SET
          lines_pct = excluded.lines_pct,
          branches_pct = excluded.branches_pct,
          functions_pct = excluded.functions_pct,
-         statements_pct = excluded.statements_pct,
          uncovered_lines = excluded.uncovered_lines,
          has_existing_test = excluded.has_existing_test`,
     );
@@ -57,7 +55,6 @@ export class SqliteCoverageReportRepository implements CoverageReportRepository 
           f.linesPct,
           f.branchesPct,
           f.functionsPct,
-          f.statementsPct,
           JSON.stringify([...f.uncoveredLines]),
           f.hasExistingTest === null ? null : f.hasExistingTest ? 1 : 0,
         );
@@ -90,7 +87,6 @@ export class SqliteCoverageReportRepository implements CoverageReportRepository 
         linesPct: r.lines_pct,
         branchesPct: r.branches_pct,
         functionsPct: r.functions_pct,
-        statementsPct: r.statements_pct,
         uncoveredLines: JSON.parse(r.uncovered_lines) as number[],
         hasExistingTest:
           r.has_existing_test === null ? null : r.has_existing_test === 1,

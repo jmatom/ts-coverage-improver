@@ -80,7 +80,6 @@ export class LcovParser {
       linesPct: pct(m.lh, m.lf),
       branchesPct: m.brf > 0 ? pct(m.brh, m.brf) : null,
       functionsPct: m.fnf > 0 ? pct(m.fnh, m.fnf) : null,
-      statementsPct: null, // lcov doesn't carry a separate "statements" metric
       uncoveredLines: m.uncoveredLines,
     });
   }

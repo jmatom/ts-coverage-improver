@@ -337,6 +337,13 @@ export class RunImprovementJob implements JobExecutor {
       await params.log(`[security] scrubbed agent-config paths before AI invoke: ${scrubbed.join(', ')}`);
     }
 
+    // The AI call is the longest opaque step in a job (typically 30s–5min).
+    // Without this line the user-facing log goes silent between agent-config
+    // scrub and AST validation; bracketing it makes the wait visible.
+    const aiStart = Date.now();
+    await params.log(
+      `Generating tests via ${this.deps.ai.id} (target: ${targetTestFile}) — this may take a few minutes…`,
+    );
     const aiOut = await this.deps.ai.generateTest({
       workdir: params.workdir,
       sourceFilePath: params.job.targetFilePath,
@@ -349,6 +356,9 @@ export class RunImprovementJob implements JobExecutor {
       env: params.aiEnv,
       retryFeedback: params.retryFeedback,
     });
+    await params.log(
+      `AI call complete in ${((Date.now() - aiStart) / 1000).toFixed(1)}s — wrote ${aiOut.writtenFiles.length} file(s)`,
+    );
 
     if (aiOut.writtenFiles.length === 0) {
       return fail(`AI did not write any files`, 'behavioral');

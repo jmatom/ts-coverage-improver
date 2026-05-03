@@ -8,7 +8,6 @@ const fc = (path: string, linesPct: number) =>
     linesPct,
     branchesPct: null,
     functionsPct: null,
-    statementsPct: null,
     uncoveredLines: [],
   });
 

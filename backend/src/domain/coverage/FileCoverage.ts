@@ -4,7 +4,6 @@ export interface FileCoverageProps {
   linesPct: number;
   branchesPct: number | null;
   functionsPct: number | null;
-  statementsPct: number | null;
   uncoveredLines: readonly number[];
   /**
    * Whether a sibling test file (e.g. `<basename>.test.ts`, `<basename>.spec.ts`,
@@ -30,7 +29,6 @@ export class FileCoverage {
     FileCoverage.assertPct('linesPct', props.linesPct);
     FileCoverage.assertPctOrNull('branchesPct', props.branchesPct);
     FileCoverage.assertPctOrNull('functionsPct', props.functionsPct);
-    FileCoverage.assertPctOrNull('statementsPct', props.statementsPct);
     return new FileCoverage({
       ...props,
       hasExistingTest: props.hasExistingTest ?? null,
@@ -65,9 +63,6 @@ export class FileCoverage {
   }
   get functionsPct(): number | null {
     return this.props.functionsPct;
-  }
-  get statementsPct(): number | null {
-    return this.props.statementsPct;
   }
   get uncoveredLines(): readonly number[] {
     return this.props.uncoveredLines;

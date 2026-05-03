@@ -6,7 +6,6 @@ describe('FileCoverage', () => {
     linesPct: 50,
     branchesPct: 40,
     functionsPct: 60,
-    statementsPct: null,
     uncoveredLines: [3, 1, 2],
   };
 
@@ -26,7 +25,6 @@ describe('FileCoverage', () => {
       ...baseProps,
       branchesPct: null,
       functionsPct: null,
-      statementsPct: null,
     });
     expect(fc.branchesPct).toBeNull();
   });
