@@ -5,6 +5,15 @@ on:
   push:
     branches: [main]
 
+# Opt every JavaScript action into Node.js 24 ahead of GitHub forcing it
+# on June 2nd, 2026. Avoids the "Node.js 20 actions are deprecated"
+# runner warning. Affects every action in every job below — currently
+# actions/checkout and actions/setup-node, both still pinned at @v4.
+# Drop this when those bump to a release whose default runtime is 24.
+# Source: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 jobs:
   backend:
     name: Backend — type-check + unit + integration tests
