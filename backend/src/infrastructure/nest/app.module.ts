@@ -22,6 +22,8 @@ import { Semaphore } from '@infrastructure/concurrency/Semaphore';
 import { SemaphoreSandbox } from '@infrastructure/concurrency/SemaphoreSandbox';
 import { SemaphoreAiAdapter } from '@infrastructure/concurrency/SemaphoreAiAdapter';
 import { TestGenerator } from '@domain/ports/TestGeneratorPort';
+import { LoggerFactory } from '@domain/ports/LoggerPort';
+import { NestLoggerFactory } from '@infrastructure/observability/NestLogger';
 import { RegisterRepository } from '@application/usecases/RegisterRepository';
 import { ListRepositories } from '@application/usecases/ListRepositories';
 import { ListLowCoverageFiles } from '@application/usecases/ListLowCoverageFiles';
@@ -44,6 +46,12 @@ import { ConfigController } from './ConfigController';
     {
       provide: TOKENS.Config,
       useFactory: () => loadAppConfig(),
+    },
+    {
+      // LoggerPort backed by NestJS's built-in Logger. Injected into use
+      // cases so domain + application stay free of `@nestjs/common` imports.
+      provide: TOKENS.LoggerFactory,
+      useFactory: () => new NestLoggerFactory(),
     },
     {
       provide: TOKENS.SqliteConnection,
@@ -257,6 +265,7 @@ import { ConfigController } from './ConfigController';
         runner: NpmCoverageRunner,
         siblingTestPathFinder: FsSiblingTestPathFinder,
         config: AppConfig,
+        loggerFactory: LoggerFactory,
       ) =>
         new AnalyzeRepositoryCoverage({
           repos,
@@ -264,6 +273,7 @@ import { ConfigController } from './ConfigController';
           git,
           coverageRunner: runner,
           siblingTestPathFinder,
+          logger: loggerFactory.create('AnalyzeRepositoryCoverage'),
           jobWorkdirRoot: config.jobWorkdirRoot,
           githubToken: config.githubToken,
         }),
@@ -274,6 +284,7 @@ import { ConfigController } from './ConfigController';
         TOKENS.CoverageRunnerPort,
         TOKENS.SiblingTestPathFinder,
         TOKENS.Config,
+        TOKENS.LoggerFactory,
       ],
     },
     {
@@ -282,11 +293,19 @@ import { ConfigController } from './ConfigController';
         repos: SqliteRepositoryRepository,
         scheduler: InMemoryPerRepoQueue,
         analyze: AnalyzeRepositoryCoverage,
-      ) => new RequestRepositoryAnalysis(repos, scheduler, analyze),
+        loggerFactory: LoggerFactory,
+      ) =>
+        new RequestRepositoryAnalysis(
+          repos,
+          scheduler,
+          analyze,
+          loggerFactory.create('RequestRepositoryAnalysis'),
+        ),
       inject: [
         TOKENS.RepositoryRepository,
         TOKENS.RepositoryAnalysisScheduler,
         AnalyzeRepositoryCoverage,
+        TOKENS.LoggerFactory,
       ],
     },
     {
@@ -314,12 +333,22 @@ import { ConfigController } from './ConfigController';
         repos: SqliteRepositoryRepository,
         scheduler: InMemoryPerRepoQueue,
         analyze: AnalyzeRepositoryCoverage,
-      ) => new RecoverPendingWork(jobs, repos, scheduler, scheduler, analyze),
+        loggerFactory: LoggerFactory,
+      ) =>
+        new RecoverPendingWork(
+          jobs,
+          repos,
+          scheduler,
+          scheduler,
+          analyze,
+          loggerFactory.create('RecoverPendingWork'),
+        ),
       inject: [
         TOKENS.JobRepository,
         TOKENS.RepositoryRepository,
         TOKENS.JobScheduler,
         AnalyzeRepositoryCoverage,
+        TOKENS.LoggerFactory,
       ],
     },
     {

@@ -1,8 +1,8 @@
-import { Logger } from '@nestjs/common';
 import { Repository } from '@domain/repository/Repository';
 import { RepositoryId } from '@domain/repository/RepositoryId';
 import { RepositoryRepository } from '@domain/ports/RepositoryRepository';
 import { RepositoryAnalysisScheduler } from '@domain/services/RepositoryAnalysisScheduler';
+import { Logger } from '@domain/ports/LoggerPort';
 import { RepositoryNotFoundError } from '@domain/errors/DomainError';
 import { AnalyzeRepositoryCoverage } from './AnalyzeRepositoryCoverage';
 import { RepositorySummaryDto } from '../dto/Dto';
@@ -24,16 +24,16 @@ import { RepositorySummaryDto } from '../dto/Dto';
  * minutes for a large repo. The dashboard polls the repository summary
  * to observe the status transitions (pending → running → idle/failed).
  *
- * The Logger is injected via Nest's default logger pattern at the
- * infrastructure layer; passing a no-op logger in tests is fine.
+ * The Logger is consumed via the `Logger` port (domain/ports/LoggerPort);
+ * the DI factory in `AppModule` injects a pre-scoped instance backed by
+ * NestJS's built-in Logger. Tests pass a no-op fake.
  */
 export class RequestRepositoryAnalysis {
-  private readonly logger = new Logger('RequestRepositoryAnalysis');
-
   constructor(
     private readonly repos: RepositoryRepository,
     private readonly scheduler: RepositoryAnalysisScheduler,
     private readonly analyze: AnalyzeRepositoryCoverage,
+    private readonly logger: Logger,
   ) {}
 
   async execute(input: { repositoryId: RepositoryId }): Promise<RepositorySummaryDto> {
