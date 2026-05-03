@@ -97,6 +97,11 @@ and `NpmCoverageRunner` raises a clear error ("Coverage report not produced
 
 ## Why `sum.test.ts` doesn't appear as a coverage row
 
+> The file names in the next two sections refer to the calculator demo
+> repo at [`jmatom/ts-coverage-demo`](https://github.com/jmatom/ts-coverage-demo) —
+> a tiny TS+Jest project deliberately kept simple to make the
+> coverage-detection trade-offs concrete.
+
 We don't filter test files at our layer — Jest does. By default
 Jest's `collectCoverageFrom` excludes `*.test.*` and `*.spec.*` from
 instrumentation, so Istanbul never writes an `SF:` block for a test file
