@@ -1,6 +1,6 @@
 import { DomainInvariantError } from '../errors/DomainError';
 import { randomUUID } from 'node:crypto';
-import { ImprovementMode, JobStatus } from './JobStatus';
+import { ImprovementMode, JobStatus, JobStatusValue } from './JobStatus';
 
 export interface ImprovementJobProps {
   id: string;
@@ -101,20 +101,30 @@ export class ImprovementJob {
     return this.props.autoRetryCount;
   }
 
+  /**
+   * Read the current status as a value object. Internal helper —
+   * `props.status` stays a string for persistence/DTO compatibility, but
+   * every mutation routes through the VO so the transition table is the
+   * single source of truth.
+   */
+  private currentStatus(): JobStatusValue {
+    return JobStatusValue.of(this.props.status);
+  }
+
   isTerminal(): boolean {
-    return this.props.status === 'succeeded' || this.props.status === 'failed';
+    return this.currentStatus().isTerminal();
   }
 
   start(coverageBefore: number): void {
-    if (this.props.status !== 'pending') {
-      throw new DomainInvariantError(`Cannot start job in status '${this.props.status}'`);
-    }
-    this.props.status = 'running';
+    this.props.status = this.currentStatus().transitionTo('running').value;
     this.props.coverageBefore = coverageBefore;
     this.props.startedAt = new Date();
   }
 
   setMode(mode: ImprovementMode): void {
+    // No transition — just a guard. setMode mutates `mode` while staying
+    // in `running`, so it can't go through transitionTo (which forbids
+    // self-loops). Cheapest correct check.
     if (this.props.status !== 'running') {
       throw new DomainInvariantError(`Cannot set mode in status '${this.props.status}'`);
     }
@@ -122,11 +132,8 @@ export class ImprovementJob {
   }
 
   succeed(input: { prUrl: string; coverageAfter: number; mode: ImprovementMode }): void {
-    if (this.props.status !== 'running') {
-      throw new DomainInvariantError(`Cannot succeed job in status '${this.props.status}'`);
-    }
     if (!input.prUrl.trim()) throw new DomainInvariantError('prUrl must be non-empty on success');
-    this.props.status = 'succeeded';
+    this.props.status = this.currentStatus().transitionTo('succeeded').value;
     this.props.prUrl = input.prUrl;
     this.props.coverageAfter = input.coverageAfter;
     this.props.mode = input.mode;
@@ -134,10 +141,7 @@ export class ImprovementJob {
   }
 
   fail(reason: string): void {
-    if (this.props.status === 'succeeded' || this.props.status === 'failed') {
-      throw new DomainInvariantError(`Cannot fail job in terminal status '${this.props.status}'`);
-    }
-    this.props.status = 'failed';
+    this.props.status = this.currentStatus().transitionTo('failed').value;
     this.props.error = reason;
     this.props.completedAt = new Date();
   }

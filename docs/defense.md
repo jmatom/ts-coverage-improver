@@ -222,6 +222,7 @@ Every architectural choice traces back to a line in the spec or a real engineeri
 | "run in the background" | `InMemoryPerRepoQueue` with SQLite persistence |
 | "Domain, Application, Infrastructure layers" | `backend/src/{domain,application,infrastructure}/` — domain has zero framework imports |
 | "framework-independent" business logic | Domain + application import only domain ports + Node `fs`/`path` — no `simple-git`, no `@octokit`, no `dockerode`, no `typescript` compiler |
+| "Model entities, value objects, and domain services" | Aggregates organized by bounded context (`coverage`, `job`, `repository`); domain services as plain pure modules (`LcovParser`, `testFileNaming`); value objects introduced *selectively* where they replace duplicated invariant checks: **`JobStatusValue`** owns the lifecycle transition table (replaces 4 inline status guards in `ImprovementJob`), **`CoveragePercentage`** validates the `[0, 100]` range once (replaces inline `assertPct` checks in `FileCoverage`), **`Subpath`** centralizes the path-traversal guard (replaces `Repository.normalizeSubpath`). Wholesale primitive-wrapping (`JobId`, `CommitSha`, `BranchName`) deferred — diminishing returns at this scale, would dilute the meaning of the load-bearing VOs |
 | "isolate AI CLI runs" | Disposable Docker container per job; FS isolation + NAT bridge + timeout |
 | "secure tokens and secrets" | Tokens via env at boot only; never logged; passed to sandbox via env vars |
 | "serialize jobs per repository" | `InMemoryPerRepoQueue` per-repo promise chain |
