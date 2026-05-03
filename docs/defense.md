@@ -260,6 +260,9 @@ Two scaling axes:
 **Q: What if Claude writes test code that imports something not in the project's deps?**
 The test run fails. That's a behavioral failure → no sibling fallback → job ends `failed` with the failed import in the logs. Honest behavior. Future improvement: feed the dep list into the AI's prompt as a constraint.
 
+**Q: A few application-layer files import `Logger` from `@nestjs/common` directly. Doesn't that violate the "no framework imports in domain/application" rule?**
+Yes, deliberately. Logging is a cross-cutting instrumentation concern, not a behavioral dependency — it doesn't change the use case's outcome, it observes it. Ports earn their cost through substitutability; a logger has one prod implementation and no test where we assert on its calls. Adding a `LoggerPort` would dilute the meaning of the real ports (`JobRepository`, `AICliPort`, `SandboxPort` — each with multiple implementations) without improving a single test, so we use `new Logger('Context')` directly and accept the lone framework import as the price. **For a take-home this trade-off is the right call**; for a long-lived production codebase where the framework choice itself might be revisited (e.g., migrating off Nest), I'd add a `LoggerPort` adapter so the application layer is genuinely framework-free — ~30 minutes of work and four small files. Happy to add it on request.
+
 ---
 
 ## Reliability & operational hardening (post-MVP, all shipped)
