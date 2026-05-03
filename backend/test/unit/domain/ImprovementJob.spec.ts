@@ -1,8 +1,9 @@
 import { ImprovementJob } from '../../../src/domain/job/ImprovementJob';
+import { RepositoryId } from '../../../src/domain/repository/RepositoryId';
 
 describe('ImprovementJob', () => {
   const create = () =>
-    ImprovementJob.create({ repositoryId: 'r1', targetFilePath: 'src/foo.ts' });
+    ImprovementJob.create({ repositoryId: RepositoryId.new(), targetFilePath: 'src/foo.ts' });
 
   it('starts in pending status', () => {
     const job = create();
@@ -65,10 +66,9 @@ describe('ImprovementJob', () => {
     expect(() => j3.fail('after')).toThrow(/Illegal job status transition/);
   });
 
-  it('rejects empty repositoryId or targetFilePath', () => {
-    expect(() => ImprovementJob.create({ repositoryId: '', targetFilePath: 'x' })).toThrow();
+  it('rejects empty targetFilePath', () => {
     expect(() =>
-      ImprovementJob.create({ repositoryId: 'r', targetFilePath: '   ' }),
+      ImprovementJob.create({ repositoryId: RepositoryId.new(), targetFilePath: '   ' }),
     ).toThrow();
   });
 

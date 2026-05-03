@@ -49,7 +49,7 @@ describe('SQLite persistence', () => {
       expect(fetched?.lastAnalyzedAt?.toISOString()).toBe('2026-05-01T10:00:00.000Z');
 
       const byName = await repo.findByOwnerAndName('o', 'n');
-      expect(byName?.id).toBe(r.id);
+      expect(byName?.id.value).toBe(r.id.value);
 
       const all = await repo.list();
       expect(all).toHaveLength(1);
@@ -362,7 +362,7 @@ describe('SQLite persistence', () => {
       await jobs.save(j);
       conn.db
         .prepare('UPDATE improvement_jobs SET auto_retry_count = 1 WHERE id = ?')
-        .run(j.id);
+        .run(j.id.value);
 
       const result = conn.reconcileOrphanRunningJobs();
       expect(result).toEqual({ requeued: 0, failed: 1 });
@@ -420,7 +420,7 @@ describe('SQLite persistence', () => {
       await repos.save(r);
       conn.db
         .prepare('UPDATE repositories SET analysis_auto_retry_count = 1 WHERE id = ?')
-        .run(r.id);
+        .run(r.id.value);
 
       const result = conn.reconcileOrphanRunningAnalyses();
       expect(result).toEqual({ requeued: 0, failed: 1 });
@@ -438,7 +438,7 @@ describe('SQLite persistence', () => {
       await repos.save(r);
       conn.db
         .prepare('UPDATE repositories SET analysis_auto_retry_count = 1 WHERE id = ?')
-        .run(r.id);
+        .run(r.id.value);
 
       const fetched = (await repos.findById(r.id))!;
       expect(fetched.analysisAutoRetryCount).toBe(1);
@@ -466,8 +466,8 @@ describe('SQLite persistence', () => {
       const j2 = ImprovementJob.create({ repositoryId: r.id, targetFilePath: 'b.ts' });
       await jobs.save(j2);
       const list = await jobs.listByRepository(r.id);
-      expect(list[0].id).toBe(j2.id);
-      expect(list[1].id).toBe(j1.id);
+      expect(list[0].id.value).toBe(j2.id.value);
+      expect(list[1].id.value).toBe(j1.id.value);
     });
   });
 });

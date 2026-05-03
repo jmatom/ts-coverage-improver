@@ -14,7 +14,7 @@ export class ListRepositories {
     for (const r of repos) {
       const latest = await this.reports.findLatestByRepository(r.id);
       summaries.push({
-        id: r.id,
+        id: r.id.value,
         owner: r.owner,
         name: r.name,
         defaultBranch: r.defaultBranch,

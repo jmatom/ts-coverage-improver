@@ -22,7 +22,9 @@ function workdirPorts() {
 }
 
 import { ImprovementJob } from '../../../src/domain/job/ImprovementJob';
+import { JobId } from '../../../src/domain/job/JobId';
 import { Repository } from '../../../src/domain/repository/Repository';
+import { RepositoryId } from '../../../src/domain/repository/RepositoryId';
 import { CoverageReport } from '../../../src/domain/coverage/CoverageReport';
 import { FileCoverage } from '../../../src/domain/coverage/FileCoverage';
 import { JobStatus } from '../../../src/domain/job/JobStatus';
@@ -44,11 +46,11 @@ class FakeJobs {
   logs: string[] = [];
   saveCount = 0;
   async save(j: ImprovementJob): Promise<void> {
-    this.rows.set(j.id, j);
+    this.rows.set(j.id.value, j);
     this.saveCount++;
   }
-  async findById(id: string): Promise<ImprovementJob | null> {
-    return this.rows.get(id) ?? null;
+  async findById(id: JobId): Promise<ImprovementJob | null> {
+    return this.rows.get(id.value) ?? null;
   }
   async listByRepository(): Promise<ImprovementJob[]> {
     return [];
@@ -62,7 +64,7 @@ class FakeJobs {
   async countActive(): Promise<number> {
     return 0;
   }
-  async appendLog(_id: string, line: string): Promise<void> {
+  async appendLog(_id: JobId, line: string): Promise<void> {
     this.logs.push(line);
   }
   async readLogs(): Promise<string[]> {
@@ -259,11 +261,11 @@ function makeFixture(opts: {
   };
 }
 
-function makeJob(repoId: string, file: string): ImprovementJob {
+function makeJob(repoId: RepositoryId, file: string): ImprovementJob {
   return ImprovementJob.create({ repositoryId: repoId, targetFilePath: file });
 }
 
-function makeReport(repoId: string, file: string, linesPct: number): CoverageReport {
+function makeReport(repoId: RepositoryId, file: string, linesPct: number): CoverageReport {
   return CoverageReport.create({
     repositoryId: repoId,
     commitSha: 'sha',
@@ -344,7 +346,7 @@ describe('RunImprovementJob (orchestration)', () => {
     // jobWorkdirRoot above and rename our fixture dir accordingly.
     const realWorkdir = join(
       (useCase as unknown as { deps: { jobWorkdirRoot: string } }).deps.jobWorkdirRoot,
-      `job-${job.id}`,
+      `job-${job.id.value}`,
     );
     if (realWorkdir !== workdir) {
       // Move our fixture content into the path the use case will compute.
@@ -410,7 +412,7 @@ describe('RunImprovementJob (orchestration)', () => {
     await jobs.save(job);
 
     const root = mkdtempSync(join(tmpdir(), 'rij-root-'));
-    const workdir = join(root, `job-${job.id}`);
+    const workdir = join(root, `job-${job.id.value}`);
     mkdirSync(join(workdir, 'src'), { recursive: true });
     writeFileSync(
       join(workdir, 'package.json'),
@@ -489,7 +491,7 @@ describe('RunImprovementJob (orchestration)', () => {
     await jobs.save(job);
 
     const root = mkdtempSync(join(tmpdir(), 'rij-noFallback-'));
-    const workdir = join(root, `job-${job.id}`);
+    const workdir = join(root, `job-${job.id.value}`);
     mkdirSync(join(workdir, 'src'), { recursive: true });
     writeFileSync(
       join(workdir, 'package.json'),
@@ -559,7 +561,7 @@ describe('RunImprovementJob (orchestration)', () => {
     await jobs.save(job);
 
     const root = mkdtempSync(join(tmpdir(), 'rij-broken-'));
-    const workdir = join(root, `job-${job.id}`);
+    const workdir = join(root, `job-${job.id.value}`);
     mkdirSync(join(workdir, 'src'), { recursive: true });
     writeFileSync(
       join(workdir, 'package.json'),
@@ -613,7 +615,7 @@ describe('RunImprovementJob (orchestration)', () => {
     await jobs.save(job);
 
     const root = mkdtempSync(join(tmpdir(), 'rij-missing-'));
-    const workdir = join(root, `job-${job.id}`);
+    const workdir = join(root, `job-${job.id.value}`);
     mkdirSync(join(workdir, 'src'), { recursive: true });
     writeFileSync(
       join(workdir, 'package.json'),
@@ -658,7 +660,7 @@ describe('RunImprovementJob (orchestration)', () => {
     await jobs.save(job);
 
     const root = mkdtempSync(join(tmpdir(), 'rij-fail-'));
-    const workdir = join(root, `job-${job.id}`);
+    const workdir = join(root, `job-${job.id.value}`);
     mkdirSync(join(workdir, 'src'), { recursive: true });
     writeFileSync(
       join(workdir, 'package.json'),
@@ -724,7 +726,7 @@ describe('RunImprovementJob (orchestration)', () => {
     await jobs.save(job);
 
     const root = mkdtempSync(join(tmpdir(), 'rij-cov-'));
-    const workdir = join(root, `job-${job.id}`);
+    const workdir = join(root, `job-${job.id.value}`);
     mkdirSync(join(workdir, 'src'), { recursive: true });
     writeFileSync(
       join(workdir, 'package.json'),

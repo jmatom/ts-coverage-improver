@@ -1,5 +1,6 @@
 import { CoverageReport } from '../../../src/domain/coverage/CoverageReport';
 import { FileCoverage } from '../../../src/domain/coverage/FileCoverage';
+import { RepositoryId } from '../../../src/domain/repository/RepositoryId';
 
 const fc = (path: string, linesPct: number) =>
   FileCoverage.create({
@@ -11,18 +12,15 @@ const fc = (path: string, linesPct: number) =>
   });
 
 describe('CoverageReport', () => {
-  it('rejects empty repositoryId or commitSha', () => {
+  it('rejects empty commitSha', () => {
     expect(() =>
-      CoverageReport.create({ repositoryId: '', commitSha: 'abc', files: [] }),
-    ).toThrow();
-    expect(() =>
-      CoverageReport.create({ repositoryId: 'r', commitSha: '   ', files: [] }),
+      CoverageReport.create({ repositoryId: RepositoryId.new(), commitSha: '   ', files: [] }),
     ).toThrow();
   });
 
   it('overallLinesPct averages file lines%', () => {
     const report = CoverageReport.create({
-      repositoryId: 'r',
+      repositoryId: RepositoryId.new(),
       commitSha: 'sha1',
       files: [fc('a.ts', 50), fc('b.ts', 100)],
     });
@@ -31,7 +29,7 @@ describe('CoverageReport', () => {
 
   it('overallLinesPct returns 0 for empty reports', () => {
     const report = CoverageReport.create({
-      repositoryId: 'r',
+      repositoryId: RepositoryId.new(),
       commitSha: 'sha',
       files: [],
     });
@@ -40,7 +38,7 @@ describe('CoverageReport', () => {
 
   it('fileFor returns undefined for unknown paths', () => {
     const report = CoverageReport.create({
-      repositoryId: 'r',
+      repositoryId: RepositoryId.new(),
       commitSha: 'sha',
       files: [fc('a.ts', 50)],
     });

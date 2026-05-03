@@ -2,6 +2,7 @@ import { Logger } from '@nestjs/common';
 import { join } from 'node:path';
 import { CoverageReport } from '@domain/coverage/CoverageReport';
 import { Repository } from '@domain/repository/Repository';
+import { RepositoryId } from '@domain/repository/RepositoryId';
 import { RepositoryRepository } from '@domain/ports/RepositoryRepository';
 import { CoverageReportRepository } from '@domain/ports/CoverageReportRepository';
 import { GitPort } from '@domain/ports/GitPort';
@@ -45,9 +46,9 @@ export class AnalyzeRepositoryCoverage {
   private readonly logger = new Logger('AnalyzeRepositoryCoverage');
   constructor(private readonly deps: AnalyzeRepositoryCoverageDeps) {}
 
-  async execute(input: { repositoryId: string }): Promise<{ commitSha: string; fileCount: number }> {
+  async execute(input: { repositoryId: RepositoryId }): Promise<{ commitSha: string; fileCount: number }> {
     const repo = await this.deps.repos.findById(input.repositoryId);
-    if (!repo) throw new Error(`Repository not found: ${input.repositoryId}`);
+    if (!repo) throw new Error(`Repository not found: ${input.repositoryId.value}`);
 
     // Transition pending → running. If the repo wasn't pending (e.g. a test
     // calls .execute directly without going through Request), this throws —
@@ -72,7 +73,7 @@ export class AnalyzeRepositoryCoverage {
     repo: Repository,
   ): Promise<{ commitSha: string; fileCount: number }> {
     // Clone root: where the entire repo lives on disk.
-    const cloneRoot = join(this.deps.jobWorkdirRoot, `analyze-${repo.id}`);
+    const cloneRoot = join(this.deps.jobWorkdirRoot, `analyze-${repo.id.value}`);
     const { commitSha } = await this.deps.git.clone({
       cloneUrl: repo.cloneUrl,
       branch: repo.defaultBranch,

@@ -1,10 +1,11 @@
 import { DomainInvariantError } from '../errors/DomainError';
-import { randomUUID } from 'node:crypto';
 import { ImprovementMode, JobStatus, JobStatusValue } from './JobStatus';
+import { JobId } from './JobId';
+import { RepositoryId } from '../repository/RepositoryId';
 
 export interface ImprovementJobProps {
-  id: string;
-  repositoryId: string;
+  id: JobId;
+  repositoryId: RepositoryId;
   targetFilePath: string;
   status: JobStatus;
   mode: ImprovementMode | null;
@@ -37,11 +38,10 @@ export interface ImprovementJobProps {
 export class ImprovementJob {
   private constructor(private readonly props: ImprovementJobProps) {}
 
-  static create(input: { repositoryId: string; targetFilePath: string }): ImprovementJob {
-    if (!input.repositoryId.trim()) throw new DomainInvariantError('repositoryId must be non-empty');
+  static create(input: { repositoryId: RepositoryId; targetFilePath: string }): ImprovementJob {
     if (!input.targetFilePath.trim()) throw new DomainInvariantError('targetFilePath must be non-empty');
     return new ImprovementJob({
-      id: randomUUID(),
+      id: JobId.new(),
       repositoryId: input.repositoryId,
       targetFilePath: input.targetFilePath,
       status: 'pending',
@@ -61,10 +61,10 @@ export class ImprovementJob {
     return new ImprovementJob({ ...props });
   }
 
-  get id(): string {
+  get id(): JobId {
     return this.props.id;
   }
-  get repositoryId(): string {
+  get repositoryId(): RepositoryId {
     return this.props.repositoryId;
   }
   get targetFilePath(): string {

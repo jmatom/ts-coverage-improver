@@ -46,7 +46,7 @@ export class RegisterRepository {
 
   private toDto(repo: Repository): RepositorySummaryDto {
     return {
-      id: repo.id,
+      id: repo.id.value,
       owner: repo.owner,
       name: repo.name,
       defaultBranch: repo.defaultBranch,

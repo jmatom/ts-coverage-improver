@@ -1,11 +1,13 @@
 import { GetJobStatus } from './GetJobStatus';
 import { ImprovementJob } from '@domain/job/ImprovementJob';
+import { JobId } from '@domain/job/JobId';
+import { RepositoryId } from '@domain/repository/RepositoryId';
 import { JobRepository } from '@domain/ports/JobRepository';
 
 function makeJob(): ImprovementJob {
   return ImprovementJob.rehydrate({
-    id: 'job-id-1234',
-    repositoryId: 'repo-1',
+    id: JobId.new(),
+    repositoryId: RepositoryId.new(),
     targetFilePath: 'src/foo.ts',
     status: 'succeeded',
     mode: null,
@@ -40,7 +42,7 @@ describe('GetJobStatus', () => {
     const repo = makeRepo({ findById: jest.fn().mockResolvedValue(null) });
     const useCase = new GetJobStatus(repo);
 
-    const result = await useCase.execute({ jobId: 'missing-id' });
+    const result = await useCase.execute({ jobId: JobId.new() });
 
     expect(result).toBeNull();
   });
@@ -57,7 +59,7 @@ describe('GetJobStatus', () => {
     const result = await useCase.execute({ jobId: job.id });
 
     expect(result).not.toBeNull();
-    expect(result!.id).toBe(job.id);
+    expect(result!.id).toBe(job.id.value);
     expect(result!.logs).toEqual(logs);
   });
 

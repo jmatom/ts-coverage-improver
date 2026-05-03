@@ -2,6 +2,7 @@ import { ImprovementJob } from '@domain/job/ImprovementJob';
 import { JobScheduler } from '@domain/services/JobScheduler';
 import { RepositoryAnalysisScheduler } from '@domain/services/RepositoryAnalysisScheduler';
 import { JobRepository } from '@domain/ports/JobRepository';
+import { RepositoryId } from '@domain/repository/RepositoryId';
 import { JobExecutor } from '@application/usecases/JobExecutor';
 
 /**
@@ -26,6 +27,11 @@ import { JobExecutor } from '@application/usecases/JobExecutor';
  * either kind are reconciled to `failed` (handled in
  * `SqliteConnection.reconcileOrphanRunningJobs` and
  * `SqliteRepositoryRepository.reconcileOrphanRunningAnalyses`).
+ *
+ * The chain map is keyed by the raw `RepositoryId.value` string — a `Map`
+ * keyed on a VO instance would treat two VOs with equal `.value` as
+ * different keys (reference equality), which would break per-repo
+ * serialization across enqueue calls.
  */
 export class InMemoryPerRepoQueue implements JobScheduler, RepositoryAnalysisScheduler {
   private readonly chains = new Map<string, Promise<void>>();
@@ -36,7 +42,7 @@ export class InMemoryPerRepoQueue implements JobScheduler, RepositoryAnalysisSch
   ) {}
 
   async enqueue(job: ImprovementJob): Promise<void> {
-    await this.scheduleOnChain(job.repositoryId, async () => {
+    await this.scheduleOnChain(job.repositoryId.value, async () => {
       try {
         await this.executor.execute(job.id);
       } catch (e) {
@@ -51,12 +57,12 @@ export class InMemoryPerRepoQueue implements JobScheduler, RepositoryAnalysisSch
     });
   }
 
-  async scheduleAnalysis(repositoryId: string, run: () => Promise<void>): Promise<void> {
+  async scheduleAnalysis(repositoryId: RepositoryId, run: () => Promise<void>): Promise<void> {
     // The analysis worker (RunRepositoryAnalysis) owns its own try/catch and
     // marks the Repository aggregate as `failed` on exception. So we don't
     // need a per-job safety net here — only the chain-level `.catch(...)`
     // below to keep the chain alive after a thrown analysis.
-    await this.scheduleOnChain(repositoryId, run);
+    await this.scheduleOnChain(repositoryId.value, run);
   }
 
   private async scheduleOnChain(
@@ -72,8 +78,8 @@ export class InMemoryPerRepoQueue implements JobScheduler, RepositoryAnalysisSch
    * Test/diagnostic helper — wait for all currently-queued work for a repo
    * to drain. Not part of either scheduler port.
    */
-  async waitForIdle(repoId: string): Promise<void> {
-    const current = this.chains.get(repoId);
+  async waitForIdle(repoId: RepositoryId): Promise<void> {
+    const current = this.chains.get(repoId.value);
     if (current) await current;
   }
 

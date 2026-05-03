@@ -1,5 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { Repository } from '@domain/repository/Repository';
+import { RepositoryId } from '@domain/repository/RepositoryId';
 import { RepositoryRepository } from '@domain/ports/RepositoryRepository';
 import { RepositoryAnalysisScheduler } from '@domain/services/RepositoryAnalysisScheduler';
 import { RepositoryNotFoundError } from '@domain/errors/DomainError';
@@ -35,9 +36,9 @@ export class RequestRepositoryAnalysis {
     private readonly analyze: AnalyzeRepositoryCoverage,
   ) {}
 
-  async execute(input: { repositoryId: string }): Promise<RepositorySummaryDto> {
+  async execute(input: { repositoryId: RepositoryId }): Promise<RepositorySummaryDto> {
     const repo = await this.repos.findById(input.repositoryId);
-    if (!repo) throw new RepositoryNotFoundError(input.repositoryId);
+    if (!repo) throw new RepositoryNotFoundError(input.repositoryId.value);
 
     // Idempotency: if an analysis is already pending or running for this
     // repo, return the current state with HTTP 202 instead of throwing.
@@ -81,7 +82,7 @@ export class RequestRepositoryAnalysis {
 
   private toDto(repo: Repository): RepositorySummaryDto {
     return {
-      id: repo.id,
+      id: repo.id.value,
       owner: repo.owner,
       name: repo.name,
       defaultBranch: repo.defaultBranch,

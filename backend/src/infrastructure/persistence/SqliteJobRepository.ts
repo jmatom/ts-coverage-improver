@@ -1,7 +1,9 @@
 import { DatabaseSync } from 'node:sqlite';
 import { ImprovementJob } from '@domain/job/ImprovementJob';
+import { JobId } from '@domain/job/JobId';
 import { ImprovementMode, JobStatus } from '@domain/job/JobStatus';
 import { JobRepository } from '@domain/ports/JobRepository';
+import { RepositoryId } from '@domain/repository/RepositoryId';
 
 interface Row {
   id: string;
@@ -43,8 +45,8 @@ export class SqliteJobRepository implements JobRepository {
            auto_retry_count = excluded.auto_retry_count`,
       )
       .run(
-        p.id,
-        p.repositoryId,
+        p.id.value,
+        p.repositoryId.value,
         p.targetFilePath,
         p.status,
         p.mode,
@@ -59,19 +61,19 @@ export class SqliteJobRepository implements JobRepository {
       );
   }
 
-  async findById(id: string): Promise<ImprovementJob | null> {
-    const row = this.db.prepare('SELECT * FROM improvement_jobs WHERE id = ?').get(id) as
+  async findById(id: JobId): Promise<ImprovementJob | null> {
+    const row = this.db.prepare('SELECT * FROM improvement_jobs WHERE id = ?').get(id.value) as
       | unknown
       | undefined;
     return row ? this.fromRow(row as Row) : null;
   }
 
-  async listByRepository(repositoryId: string): Promise<ImprovementJob[]> {
+  async listByRepository(repositoryId: RepositoryId): Promise<ImprovementJob[]> {
     const rows = this.db
       .prepare(
         'SELECT * FROM improvement_jobs WHERE repository_id = ? ORDER BY created_at DESC',
       )
-      .all(repositoryId) as unknown as Row[];
+      .all(repositoryId.value) as unknown as Row[];
     return rows.map((r) => this.fromRow(r));
   }
 
@@ -93,7 +95,7 @@ export class SqliteJobRepository implements JobRepository {
   }
 
   async findInFlightForFile(
-    repositoryId: string,
+    repositoryId: RepositoryId,
     targetFilePath: string,
   ): Promise<ImprovementJob | null> {
     const row = this.db
@@ -105,30 +107,30 @@ export class SqliteJobRepository implements JobRepository {
           ORDER BY created_at DESC
           LIMIT 1`,
       )
-      .get(repositoryId, targetFilePath) as unknown | undefined;
+      .get(repositoryId.value, targetFilePath) as unknown | undefined;
     return row ? this.fromRow(row as Row) : null;
   }
 
-  async appendLog(jobId: string, line: string): Promise<void> {
-    this.db.prepare('INSERT INTO job_logs (job_id, line) VALUES (?, ?)').run(jobId, line);
+  async appendLog(jobId: JobId, line: string): Promise<void> {
+    this.db.prepare('INSERT INTO job_logs (job_id, line) VALUES (?, ?)').run(jobId.value, line);
   }
 
-  async readLogs(jobId: string): Promise<string[]> {
+  async readLogs(jobId: JobId): Promise<string[]> {
     const rows = this.db
       .prepare('SELECT line FROM job_logs WHERE job_id = ? ORDER BY id')
-      .all(jobId) as unknown as { line: string }[];
+      .all(jobId.value) as unknown as { line: string }[];
     return rows.map((r) => r.line);
   }
 
-  async delete(jobId: string): Promise<void> {
+  async delete(jobId: JobId): Promise<void> {
     // ON DELETE CASCADE on job_logs.job_id removes the log rows automatically.
-    this.db.prepare('DELETE FROM improvement_jobs WHERE id = ?').run(jobId);
+    this.db.prepare('DELETE FROM improvement_jobs WHERE id = ?').run(jobId.value);
   }
 
   private fromRow(row: Row): ImprovementJob {
     return ImprovementJob.rehydrate({
-      id: row.id,
-      repositoryId: row.repository_id,
+      id: JobId.of(row.id),
+      repositoryId: RepositoryId.of(row.repository_id),
       targetFilePath: row.target_file_path,
       status: row.status as JobStatus,
       mode: (row.mode as ImprovementMode) ?? null,

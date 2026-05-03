@@ -1,10 +1,11 @@
 import { DomainInvariantError } from '../errors/DomainError';
 import { randomUUID } from 'node:crypto';
 import { FileCoverage } from './FileCoverage';
+import { RepositoryId } from '../repository/RepositoryId';
 
 export interface CoverageReportProps {
   id: string;
-  repositoryId: string;
+  repositoryId: RepositoryId;
   commitSha: string;
   generatedAt: Date;
   files: FileCoverage[];
@@ -19,12 +20,11 @@ export class CoverageReport {
   private constructor(private readonly props: CoverageReportProps) {}
 
   static create(input: {
-    repositoryId: string;
+    repositoryId: RepositoryId;
     commitSha: string;
     files: FileCoverage[];
     generatedAt?: Date;
   }): CoverageReport {
-    if (!input.repositoryId.trim()) throw new DomainInvariantError('repositoryId must be non-empty');
     if (!input.commitSha.trim()) throw new DomainInvariantError('commitSha must be non-empty');
     return new CoverageReport({
       id: randomUUID(),
@@ -42,7 +42,7 @@ export class CoverageReport {
   get id(): string {
     return this.props.id;
   }
-  get repositoryId(): string {
+  get repositoryId(): RepositoryId {
     return this.props.repositoryId;
   }
   get commitSha(): string {

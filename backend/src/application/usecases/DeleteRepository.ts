@@ -1,3 +1,4 @@
+import { RepositoryId } from '@domain/repository/RepositoryId';
 import { RepositoryRepository } from '@domain/ports/RepositoryRepository';
 import { RepositoryNotFoundError } from '@domain/errors/DomainError';
 
@@ -10,9 +11,9 @@ import { RepositoryNotFoundError } from '@domain/errors/DomainError';
 export class DeleteRepository {
   constructor(private readonly repos: RepositoryRepository) {}
 
-  async execute(input: { id: string }): Promise<void> {
+  async execute(input: { id: RepositoryId }): Promise<void> {
     const repo = await this.repos.findById(input.id);
-    if (!repo) throw new RepositoryNotFoundError(input.id);
+    if (!repo) throw new RepositoryNotFoundError(input.id.value);
     await this.repos.delete(input.id);
   }
 }

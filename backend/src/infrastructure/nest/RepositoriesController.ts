@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -10,6 +9,8 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import { CoverageThreshold } from '@domain/coverage/CoverageThreshold';
+import { RepositoryId } from '@domain/repository/RepositoryId';
 import { RegisterRepository } from '@application/usecases/RegisterRepository';
 import { ListRepositories } from '@application/usecases/ListRepositories';
 import { ListLowCoverageFiles } from '@application/usecases/ListLowCoverageFiles';
@@ -51,24 +52,24 @@ export class RepositoriesController {
     @Param('id') id: string,
     @Query('threshold') threshold?: string,
   ) {
-    await this.assertRepoExists(id);
-    const t =
-      threshold !== undefined ? Number(threshold) : this.config.defaultCoverageThreshold;
-    if (!Number.isFinite(t) || t < 0 || t > 100) {
-      throw new BadRequestException('threshold must be in [0, 100]');
-    }
-    return this.listLow.execute({ repositoryId: id, threshold: t });
+    const repoId = RepositoryId.of(id);
+    await this.assertRepoExists(repoId);
+    return this.listLow.execute({
+      repositoryId: repoId,
+      threshold: CoverageThreshold.fromInput(threshold, this.config.defaultCoverageThreshold),
+    });
   }
 
   @Post(':id/refresh')
   @HttpCode(202)
   async refresh(@Param('id') id: string) {
-    await this.assertRepoExists(id);
+    const repoId = RepositoryId.of(id);
+    await this.assertRepoExists(repoId);
     // Returns 202 immediately with the repo summary in the new "pending"
     // state. The actual analysis (clone + install + tests, can take
     // minutes) runs on the per-repo queue worker. The dashboard polls
     // GET /repositories to observe the status transition.
-    return this.requestAnalysis.execute({ repositoryId: id });
+    return this.requestAnalysis.execute({ repositoryId: repoId });
   }
 
   @Post(':id/jobs')
@@ -76,9 +77,10 @@ export class RepositoriesController {
     @Param('id') id: string,
     @Body() body: RequestImprovementJobRequestDto,
   ) {
-    await this.assertRepoExists(id);
+    const repoId = RepositoryId.of(id);
+    await this.assertRepoExists(repoId);
     return this.requestJob.execute({
-      repositoryId: id,
+      repositoryId: repoId,
       targetFilePath: body.filePath,
     });
   }
@@ -86,11 +88,11 @@ export class RepositoriesController {
   @Delete(':id')
   @HttpCode(204)
   async remove(@Param('id') id: string): Promise<void> {
-    await this.removeRepo.execute({ id });
+    await this.removeRepo.execute({ id: RepositoryId.of(id) });
   }
 
-  private async assertRepoExists(id: string): Promise<void> {
+  private async assertRepoExists(id: RepositoryId): Promise<void> {
     const r = await this.repos.findById(id);
-    if (!r) throw new RepositoryNotFoundError(id);
+    if (!r) throw new RepositoryNotFoundError(id.value);
   }
 }

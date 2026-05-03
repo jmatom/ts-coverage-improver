@@ -1,8 +1,9 @@
 import { AnalysisStatus, Repository } from '../repository/Repository';
+import { RepositoryId } from '../repository/RepositoryId';
 
 export interface RepositoryRepository {
   save(repository: Repository): Promise<void>;
-  findById(id: string): Promise<Repository | null>;
+  findById(id: RepositoryId): Promise<Repository | null>;
   findByOwnerAndName(owner: string, name: string): Promise<Repository | null>;
   list(): Promise<Repository[]>;
   /**
@@ -16,5 +17,5 @@ export interface RepositoryRepository {
    * reports, file coverages, jobs, and job logs. The bot's GitHub fork
    * is left intact — it may have open PRs we don't want to surprise-delete.
    */
-  delete(id: string): Promise<void>;
+  delete(id: RepositoryId): Promise<void>;
 }

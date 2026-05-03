@@ -1,4 +1,5 @@
 import { ImprovementJob } from '@domain/job/ImprovementJob';
+import { RepositoryId } from '@domain/repository/RepositoryId';
 import { JobRepository } from '@domain/ports/JobRepository';
 import { CoverageReportRepository } from '@domain/ports/CoverageReportRepository';
 import { JobScheduler } from '@domain/services/JobScheduler';
@@ -44,12 +45,12 @@ export class RequestImprovementJob {
   }
 
   async execute(input: {
-    repositoryId: string;
+    repositoryId: RepositoryId;
     targetFilePath: string;
   }): Promise<JobDto> {
     const latest = await this.reports.findLatestByRepository(input.repositoryId);
     if (!latest) {
-      throw new NoCoverageReportError(input.repositoryId);
+      throw new NoCoverageReportError(input.repositoryId.value);
     }
     const fileCov = latest.fileFor(input.targetFilePath);
     if (!fileCov) {
@@ -67,7 +68,7 @@ export class RequestImprovementJob {
       input.targetFilePath,
     );
     if (inFlight) {
-      throw new JobAlreadyInFlightError(input.targetFilePath, inFlight.id);
+      throw new JobAlreadyInFlightError(input.targetFilePath, inFlight.id.value);
     }
     // Admission control. Checked AFTER the per-file idempotency guard so
     // that retrying the same file when a job is already in flight returns

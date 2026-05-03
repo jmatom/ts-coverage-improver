@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { CoverageReport } from '@domain/coverage/CoverageReport';
 import { FileCoverage } from '@domain/coverage/FileCoverage';
 import { CoverageReportRepository } from '@domain/ports/CoverageReportRepository';
+import { RepositoryId } from '@domain/repository/RepositoryId';
 
 interface ReportRow {
   id: string;
@@ -44,7 +45,7 @@ export class SqliteCoverageReportRepository implements CoverageReportRepository 
     try {
       insertReport.run(
         report.id,
-        report.repositoryId,
+        report.repositoryId.value,
         report.commitSha,
         report.generatedAt.toISOString(),
       );
@@ -66,7 +67,7 @@ export class SqliteCoverageReportRepository implements CoverageReportRepository 
     }
   }
 
-  async findLatestByRepository(repositoryId: string): Promise<CoverageReport | null> {
+  async findLatestByRepository(repositoryId: RepositoryId): Promise<CoverageReport | null> {
     const reportRow = this.db
       .prepare(
         `SELECT * FROM coverage_reports
@@ -74,7 +75,7 @@ export class SqliteCoverageReportRepository implements CoverageReportRepository 
           ORDER BY generated_at DESC
           LIMIT 1`,
       )
-      .get(repositoryId) as unknown as ReportRow | undefined;
+      .get(repositoryId.value) as unknown as ReportRow | undefined;
     if (!reportRow) return null;
 
     const fileRows = this.db
@@ -95,7 +96,7 @@ export class SqliteCoverageReportRepository implements CoverageReportRepository 
 
     return CoverageReport.rehydrate({
       id: reportRow.id,
-      repositoryId: reportRow.repository_id,
+      repositoryId: RepositoryId.of(reportRow.repository_id),
       commitSha: reportRow.commit_sha,
       generatedAt: new Date(reportRow.generated_at),
       files,
