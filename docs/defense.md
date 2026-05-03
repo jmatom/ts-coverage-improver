@@ -343,7 +343,85 @@ The current design is the right shape for a single-instance, in-process serializ
 
 For both, the API service stops touching SQLite for queue state — it just publishes a message. Workers consume, run the job, write the *result* to the durable store. That's the textbook decoupled architecture, and the `JobScheduler` / `RepositoryAnalysisScheduler` ports are already shaped for the swap (zero domain or application code changes — only a new infrastructure adapter).
 
-**Why not in the take-home:** an external broker means a new container in `docker-compose.yml`, a new client lib, and the two-phase coordination problem (broker says "delivered", DB save crashes — now they disagree). That coordination is the hard part of brokers and you don't get it for free. With one backend container and SQLite already in the box, the row-as-message approach is the simplest thing that's actually correct, and the seam to upgrade is already cut.
+**Why not in the take-home:** an external broker means a new container in `docker-compose.yml`, a new client lib, and the two-phase coordination problem (broker says "delivered", DB save crashes — now they disagree). That coordination is the hard part of brokers and you don't get it for free. With one backend container and SQLite already in the box, the row-as-message approach is the simplest thing that's actually correct, and the seam to upgrade is already cut. The full architectural target is laid out in the next section.
+
+---
+
+## Improvements for production
+
+The current implementation is honest about its scope: a single-instance NestJS service with an in-process per-repo queue, persisting to SQLite. That shape is right for a take-home, an internal tool, or any deployment that fits on one box. For a multi-tenant production service the architecture would shift to a **decoupled command-bus + transactional-outbox pattern**.
+
+### The shift in one line
+
+> Today: the API process *owns* the work queue.
+> Production: the API *hands off* work via the database, an outbox poller forwards it to a broker, and a separate worker pool processes it.
+
+### How the outbox pattern works (and why it solves a real problem)
+
+The naive design — "API writes the row, then publishes to the broker" — has a window where the DB write succeeds but the broker call fails (or vice versa). State diverges silently. The transactional-outbox pattern closes that window:
+
+```sql
+BEGIN;
+  INSERT INTO improvement_jobs ... ;            -- the domain row (or repositories for analyses)
+  INSERT INTO outbox (
+    aggregate_type, aggregate_id, payload, status, created_at
+  ) VALUES ('improvement_job', $jobId, $json, 'pending', NOW());
+COMMIT;
+```
+
+Both rows land or both fail — a single SQL transaction guarantees it. No dual-write, no lost messages, no orphaned rows.
+
+A separate **outbox poller** (cronjob or long-running worker) polls `outbox WHERE status = 'pending' ORDER BY created_at LIMIT N` every few seconds, publishes each row's payload to the broker, and **marks the row `published`** (not deleted — keep the audit trail; a separate cleanup job prunes old rows after N days). If publishing fails, the row stays `pending` and is retried on the next tick. Idempotent by construction.
+
+```
+┌─────────┐      ┌──────────────┐     ┌──────────────┐    ┌─────────┐    ┌──────────┐
+│   API   │─────>│ outbox table │<────│ outbox poller│───>│  broker │───>│ workers  │
+│ (write) │  TX  │  + domain    │ TX  │  (cronjob)   │    │ (queue) │    │ (consume)│
+└─────────┘      └──────────────┘     └──────────────┘    └─────────┘    └──────────┘
+```
+
+### Broker choice
+
+Three options, each fitting different scale/feature points:
+
+| Broker | Best for |
+|---|---|
+| **2 × AWS SQS FIFO queues** (`repository-analysis` + `improvement-jobs`), `MessageGroupId=<repositoryId>` | Default choice. Native per-repo serialization (matches our spec invariant for free). Visibility timeout = built-in lease/heartbeat. DLQ = direct analog of our "auto-retry budget exhausted" bucket. Cheap, fully managed, scales linearly with no ops cost |
+| **Kafka topics** keyed by `repositoryId` | When throughput exceeds SQS limits, when we want replay (re-analyze full history from the topic), or when downstream services need to consume the same job stream (audit, analytics, billing) |
+| **RabbitMQ** with topic exchanges | When fanout to multiple consumer groups is the primary need, or in environments that already run RabbitMQ for other workloads |
+
+For our workload, SQS FIFO is the closest fit — `MessageGroupId` IS the per-repo serialization invariant we already enforce in code. Kafka is the right answer once one of its specific advantages becomes load-bearing.
+
+### Workers
+
+Separate processes (containers, Lambdas, k8s pods) consume from the broker. Stateless, horizontally scalable, deployed and restarted independently of the API. Each worker:
+
+1. Receives a message
+2. Runs the job (clone → AI → validate → PR for improvements; clone → install → tests for analyses)
+3. Writes the result row to the database (`improvement_jobs.status = 'succeeded'` + `pr_url`, or `coverage_reports`)
+4. Acks the message back to the broker
+
+Visibility timeout (SQS) or session timeout (Kafka consumer group) handles workers that crash mid-job — the message becomes visible again and another worker picks it up. Same effect as our current crash-recovery story, but managed by the broker instead of by our boot reconciler.
+
+### What this buys us
+
+| Benefit | Why it matters |
+|---|---|
+| **API ↔ workers decoupled** | Worker can be down for maintenance or under heavy load — API keeps accepting requests, the broker buffers them. Worker drains the backlog when it returns |
+| **API restart is risk-free** | API never holds in-process queue state. Restart = zero in-flight work, zero recovery dance |
+| **Workers scale independently per work-type** | If AI calls spike, scale the improvement-job worker pool. The API stays small. Scaling is by demand, not coupled |
+| **Resilience to partial outages** | API down → workers keep draining backlog. Workers down → API keeps accepting work into the outbox. Either side can recover without the other |
+| **Multi-region / multi-tenant ready** | Workers can be sharded geographically or by tenant. Brokers handle the routing |
+| **At-least-once with idempotency** | Outbox guarantees publish; broker guarantees delivery; worker-side idempotency (we already have `ensureFork`, status-check before `start()`, the `auto_retry_count` cap) handles duplicates cleanly |
+
+### Why not now
+
+Three honest reasons:
+1. **Scope** — a broker means a new container in `docker-compose.yml` (LocalStack to mimic SQS, or Redpanda for Kafka), a new client library, the outbox poller as its own service, and tests for the publish-or-retry semantics. ~2 days of work to do properly.
+2. **The dual-write problem doesn't exist yet at this scale.** API and queue are the same process sharing the same SQLite transaction. Today's `Sqlite{Job,Repository}Repository.save()` IS the outbox-equivalent — a single atomic write that both persists state AND enqueues work for the in-process scheduler.
+3. **The seam is already there.** `JobScheduler` and `RepositoryAnalysisScheduler` are domain ports. Swapping `InMemoryPerRepoQueue` for `OutboxScheduler` (writes to outbox table) + adding a separate `OutboxPoller` service is purely an infrastructure-layer change. **Zero domain or application code touched.** The cost of upgrading later is one new infra adapter + the broker setup — not a refactor of the use cases.
+
+That last point is the architectural payoff: by treating the queue as a port from day one, we paid the small cost of port-defining today to keep the option of brokers open for tomorrow, without prematurely adopting them.
 
 ---
 
