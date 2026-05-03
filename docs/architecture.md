@@ -93,7 +93,7 @@ sequenceDiagram
     Note over Backend: --- background promise chain ---
     Backend->>GitHub: clone (host-side simple-git, PAT in URL)
     GitHub-->>Backend: source files into per-job workdir
-    Backend->>Backend: scrubAgentConfig() — drop CLAUDE.md, .cursor/, etc.
+    Backend->>Backend: AgentConfigScrubber.scrub() — drop CLAUDE.md, .cursor/, etc.
 
     Backend->>Sandbox: spawn #1 — install + jest --coverage<br/>(env: none of the secrets)
     Sandbox-->>Backend: coverage/lcov.info → coverageBefore
@@ -129,7 +129,7 @@ A few callouts on the sequence:
   bind-mount, not memory or env. The attacker's `postinstall` (in
   spawn #1) cannot read `ANTHROPIC_API_KEY` because that var is only
   injected into spawn #2's env array.
-- The pre-AI `scrubAgentConfig()` and the post-AI `secret-leak scan`
+- The pre-AI `AgentConfigScrubber.scrub()` and the post-AI `SecretScanner.findIn()`
   are the prompt-injection defenses described in
   [`security.md`](./security.md).
 - On AST or test or coverage-delta failure, the loop retries (up to 2

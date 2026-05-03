@@ -194,8 +194,8 @@ the orchestrator address this:
 ### Mitigation 1: pre-AI agent-config scrubbing
 
 Before the AI invocation phase, `RunImprovementJob.runOneAttempt()`
-calls `scrubAgentConfig(workdir)`
-(`backend/src/application/util/scrubAgentConfig.ts`), which removes:
+calls `AgentConfigScrubber.scrub(workdir)`
+(`backend/src/application/services/AgentConfigScrubber.ts`), which removes:
 
 - `CLAUDE.md`, `claude.md`, `CLAUDE.local.md`
 - `.claude/`, `.cursor/`, `.cursorrules`, `.continue/`
@@ -218,7 +218,7 @@ influence the AI.
 After the AI returns, `RunImprovementJob.runOneAttempt()` scans both
 the AI's logs (`aiOut.logs`) and the contents of every file the AI
 wrote (`aiOut.writtenFiles`) for known secret shapes via
-`findSuspectedSecret()` (`backend/src/application/util/secretGuard.ts`):
+`SecretScanner.findIn()` (`backend/src/domain/security/SecretScanner.ts`):
 
 | Pattern | Catches |
 |---|---|

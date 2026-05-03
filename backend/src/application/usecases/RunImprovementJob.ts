@@ -1,9 +1,9 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { detectTestConvention } from '../util/detectTestConvention';
-import { findExistingTestPath } from '../util/findExistingTestPath';
-import { scrubAgentConfig } from '../util/scrubAgentConfig';
-import { findSuspectedSecret } from '../util/secretGuard';
+import { TestConventionDetector } from '../services/TestConventionDetector';
+import { SiblingTestPathFinder } from '../services/SiblingTestPathFinder';
+import { AgentConfigScrubber } from '../services/AgentConfigScrubber';
+import { SecretScanner } from '@domain/security/SecretScanner';
 import { CoverageReport } from '@domain/coverage/CoverageReport';
 import { ImprovementJob } from '@domain/job/ImprovementJob';
 import { ImprovementMode } from '@domain/job/JobStatus';
@@ -135,13 +135,13 @@ export class RunImprovementJob implements JobExecutor {
       const framework = detectFrameworkFromDeps(detectionInfo.allDeps);
       await log(`Detected framework: ${framework}`);
 
-      const existingTestPath = await findExistingTestPath(workdir, job.targetFilePath);
+      const existingTestPath = await SiblingTestPathFinder.findExisting(workdir, job.targetFilePath);
       const styleExample = pickStyleExample(workdir, job.targetFilePath, existingTestPath);
 
       // Detect whether the project uses *.test.* or *.spec.* as its sibling
       // naming convention. Drives the name of any new test file we ask the
       // AI to create — matches existing repo style instead of forcing `.test`.
-      const testConvention = await detectTestConvention(workdir);
+      const testConvention = await TestConventionDetector.detect(workdir);
       await log(`Project test naming convention: *.${testConvention}.ts`);
 
       // Fast-fail: parse the existing test file BEFORE spawning a sandbox.
@@ -332,7 +332,7 @@ export class RunImprovementJob implements JobExecutor {
     // a malicious target repo (or its postinstall) may have planted to inject
     // instructions into Claude Code. Logged but not failed: agent-config
     // scrubbing is defense in depth, not a hard requirement.
-    const scrubbed = await scrubAgentConfig(params.workdir);
+    const scrubbed = await AgentConfigScrubber.scrub(params.workdir);
     if (scrubbed.length > 0) {
       await params.log(`[security] scrubbed agent-config paths before AI invoke: ${scrubbed.join(', ')}`);
     }
@@ -404,7 +404,7 @@ export class RunImprovementJob implements JobExecutor {
     // retry. Most likely an attempted prompt injection from the target
     // repo got partially through. See docs/security.md for the threat
     // model and the limits of this guard.
-    const logHit = findSuspectedSecret(aiOut.logs);
+    const logHit = SecretScanner.findIn(aiOut.logs);
     if (logHit) {
       return fail(
         `[security] suspected secret leak in AI logs (${logHit.name}, prefix '${logHit.prefix}…'); halting job to avoid pushing it upstream.`,
@@ -415,7 +415,7 @@ export class RunImprovementJob implements JobExecutor {
       const abs = join(params.workdir, rel);
       if (!existsSync(abs)) continue;
       const content = readFileSync(abs, 'utf8');
-      const fileHit = findSuspectedSecret(content);
+      const fileHit = SecretScanner.findIn(content);
       if (fileHit) {
         return fail(
           `[security] suspected secret leak in ${rel} (${fileHit.name}, prefix '${fileHit.prefix}…'); halting job to avoid pushing it upstream.`,

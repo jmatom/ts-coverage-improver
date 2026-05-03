@@ -1,9 +1,9 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { scrubAgentConfig } from '../../../src/application/util/scrubAgentConfig';
+import { AgentConfigScrubber } from '../../../../src/application/services/AgentConfigScrubber';
 
-describe('scrubAgentConfig', () => {
+describe('AgentConfigScrubber.scrub', () => {
   let workdir: string;
   beforeEach(() => {
     workdir = mkdtempSync(join(tmpdir(), 'scrub-'));
@@ -20,14 +20,14 @@ describe('scrubAgentConfig', () => {
 
   it('removes a planted CLAUDE.md', async () => {
     touch('CLAUDE.md');
-    await scrubAgentConfig(workdir);
+    await AgentConfigScrubber.scrub(workdir);
     expect(existsSync(join(workdir, 'CLAUDE.md'))).toBe(false);
   });
 
   it('removes a planted .claude/ directory recursively', async () => {
     touch('.claude/settings.json');
     touch('.claude/instructions.md');
-    await scrubAgentConfig(workdir);
+    await AgentConfigScrubber.scrub(workdir);
     expect(existsSync(join(workdir, '.claude'))).toBe(false);
   });
 
@@ -39,7 +39,7 @@ describe('scrubAgentConfig', () => {
     touch('.aider.input.history');
     touch('AGENTS.md');
     touch('agents.md');
-    await scrubAgentConfig(workdir);
+    await AgentConfigScrubber.scrub(workdir);
     for (const rel of [
       '.cursor',
       '.cursorrules',
@@ -57,17 +57,23 @@ describe('scrubAgentConfig', () => {
     touch('src/keepme.ts');
     touch('package.json');
     touch('README.md');
-    await scrubAgentConfig(workdir);
+    await AgentConfigScrubber.scrub(workdir);
     expect(existsSync(join(workdir, 'src/keepme.ts'))).toBe(true);
     expect(existsSync(join(workdir, 'package.json'))).toBe(true);
     expect(existsSync(join(workdir, 'README.md'))).toBe(true);
   });
 
   it('is a no-op when no targets exist', async () => {
-    const result = await scrubAgentConfig(workdir);
+    const result = await AgentConfigScrubber.scrub(workdir);
     // The function tries every target — `force: true` makes ENOENT silent,
     // so all paths appear in the "removed" list. The contract is that the
     // workdir's non-target contents are untouched.
     expect(result.length).toBeGreaterThan(0);
+  });
+
+  it('exposes its targets list as `AgentConfigScrubber.targets`', () => {
+    expect(AgentConfigScrubber.targets).toContain('CLAUDE.md');
+    expect(AgentConfigScrubber.targets).toContain('.claude');
+    expect(AgentConfigScrubber.targets.length).toBeGreaterThan(5);
   });
 });

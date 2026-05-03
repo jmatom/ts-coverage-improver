@@ -6,7 +6,7 @@ import { RepositoryRepository } from '@domain/ports/RepositoryRepository';
 import { CoverageReportRepository } from '@domain/ports/CoverageReportRepository';
 import { GitPort } from '@domain/ports/GitPort';
 import { CoverageRunnerPort } from '@domain/ports/CoverageRunnerPort';
-import { findExistingTestPath } from '../util/findExistingTestPath';
+import { SiblingTestPathFinder } from '../services/SiblingTestPathFinder';
 
 export interface AnalyzeRepositoryCoverageDeps {
   repos: RepositoryRepository;
@@ -108,7 +108,7 @@ export class AnalyzeRepositoryCoverage {
     // rather than serial-O(N). Keeps the event loop free during analyze.
     const enrichedFiles = await Promise.all(
       result.files.map(async (f) =>
-        f.withHasExistingTest((await findExistingTestPath(packageRoot, f.path)) !== null),
+        f.withHasExistingTest((await SiblingTestPathFinder.findExisting(packageRoot, f.path)) !== null),
       ),
     );
 
