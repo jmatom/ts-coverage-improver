@@ -95,7 +95,7 @@ sequenceDiagram
 
     Backend->>GitHub: clone default branch into cloneRoot<br/>(host-side simple-git, PAT in URL — whole repo, not subpath-scoped)
     GitHub-->>Backend: source files into cloneRoot
-    Backend->>Backend: resolve packageRoot = cloneRoot joined with repo.subpath (if set)<br/>(scopes install + tests for monorepos; git ops stay at cloneRoot)
+    Backend->>Backend: resolve packageRoot = cloneRoot plus repo.subpath when set<br/>(scopes install + tests for monorepos, git ops stay at cloneRoot)
 
     Backend->>Sandbox: spawn (workdir = packageRoot) — detect framework (jest/vitest/mocha+c8/nyc),<br/>npm install, run tests with coverage
     Sandbox-->>Backend: coverage/lcov.info
