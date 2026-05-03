@@ -155,7 +155,7 @@ sequenceDiagram
     Browser->>Backend: POST /api/repositories/:id/jobs
     Backend->>Backend: validate (file in report, < 100%, not in flight, queue depth OK)
     Backend->>Backend: persist job (status=pending) + enqueue
-    Backend-->>Browser: 201 { id, status: "pending" }
+    Backend-->>Browser: 202 { id, status: "pending" }
     Note over Browser: Polls /api/jobs/:id every 3s
 
     Note over Backend: --- background promise chain ---

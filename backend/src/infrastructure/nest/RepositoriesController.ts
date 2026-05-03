@@ -37,6 +37,8 @@ export class RepositoriesController {
     @Inject(TOKENS.Config) private readonly config: AppConfig,
   ) {}
 
+  // Success: 202 (idempotent register). Failures: 400 INVALID_GITHUB_URL,
+  // 422 FORKING_DISABLED, 502 UPSTREAM_UNREACHABLE.
   @Post()
   @HttpCode(202)
   async create(@Body() body: RegisterRepositoryRequestDto) {
@@ -68,6 +70,9 @@ export class RepositoriesController {
     });
   }
 
+  // Success: 202 (always — pending/running maps to "already in flight"
+  // returned as 202 too). Failures: 400 INVALID_REPOSITORY_ID,
+  // 404 REPOSITORY_NOT_FOUND.
   @Post(':id/refresh')
   @HttpCode(202)
   async refresh(@Param('id') id: string) {
@@ -80,6 +85,11 @@ export class RepositoriesController {
     return this.requestAnalysis.execute({ repositoryId: repoId });
   }
 
+  // Success: 202 (job persisted in pending + enqueued).
+  // Failures: 400 INVALID_REPOSITORY_ID, 404 REPOSITORY_NOT_FOUND,
+  // 409 JOB_ALREADY_IN_FLIGHT, 422 NO_COVERAGE_REPORT |
+  // FILE_NOT_IN_REPORT | FILE_ALREADY_AT_100_PERCENT,
+  // 503 QUEUE_DEPTH_EXCEEDED.
   @Post(':id/jobs')
   @HttpCode(202)
   async createJob(
@@ -98,6 +108,8 @@ export class RepositoriesController {
     });
   }
 
+  // Success: 204 (no body). Failures: 400 INVALID_REPOSITORY_ID,
+  // 404 REPOSITORY_NOT_FOUND.
   @Delete(':id')
   @HttpCode(204)
   async remove(@Param('id') id: string): Promise<void> {

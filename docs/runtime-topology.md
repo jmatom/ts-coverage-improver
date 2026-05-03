@@ -293,7 +293,7 @@ Frontend nginx
 Backend Nest
   └─ RepositoriesController.createJob
        └─ RequestImprovementJob.execute  (validates, persists job row, enqueues)
-       └─ returns { id, status: 'pending', ... }                     (HTTP 201)
+       └─ returns { id, status: 'pending', ... }                     (HTTP 202)
         │
         ▼
 Browser starts polling  GET /api/jobs/:id   every 3s
