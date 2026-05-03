@@ -147,7 +147,7 @@ functions. **No math is added by us beyond rounding.**
 | Mocha without c8 or nyc | `MissingMochaCoverageToolError` — "install c8 or nyc as a devDep" |
 | Project's `scripts.test` wraps coverage but the wrapper outputs only non-lcov reporters (e.g. `text-summary`) | `coverage/lcov.info` won't exist → "Coverage report not produced" error from `NpmTestRunner` |
 | Repo has *both* `jest` and `vitest` declared | Vitest wins (priority order). Rare in practice |
-| Monorepos (nx, turbo, pnpm workspaces) | Detection runs at the repo root only; sub-packages are not recursed. Out of scope for v1 |
+| Monorepos (nx, turbo, pnpm workspaces) | Supported via the `subpath` field on the Repository aggregate — the user provides the path to the package's `package.json` at registration. Detection then runs against that subdirectory; git operations stay at the clone root. See `Subpath` VO for the path-traversal guard. |
 | Node.js built-in `node:test` runner | Not detected — its coverage flags only emit lcov on Node ≥22 with `--experimental-test-coverage --test-reporter=lcov`. Rare in OSS today |
 
 ## Inspecting the raw lcov yourself
@@ -172,7 +172,7 @@ looks wrong, this is the first place to check.
 | **Bun (`bun test --coverage`)** | ~10 lines + lockfile case (`bun.lockb`) — Bun emits lcov natively | Increasingly common in modern TS OSS |
 | **`node:test` (Node ≥22)** | Detect lack of test framework but presence of `node --test` in `scripts.test`; force `--experimental-test-coverage --test-reporter=lcov` | Rising; zero-dep test runner |
 | **Coverage-config sanity check when honoring project command** | Parse `jest.config.*` / `vitest.config.*` to ensure an lcov reporter is present | Reduces "coverage report not produced" surprises |
-| **Monorepo support** | Detect workspace files; either pick a sub-package by user input or aggregate across packages | Required to onboard most large OSS repos |
+| **Workspace auto-detection** | On registration, parse `package.json` `workspaces` / `pnpm-workspace.yaml` / `nx.json` and offer the user a picker of sub-packages instead of free-form `subpath` input | Removes a step from the monorepo onboarding flow; current `subpath` field already covers the underlying capability |
 
 These are all framework-detection extensions; nothing downstream
 (parser, persistence, UI) would need to change.
