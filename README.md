@@ -141,9 +141,20 @@ the runtime data flow are in
 
 ```bash
 cd backend
-npm test                                 # 118 tests across 17 suites
-npm test -- --testPathPattern='unit'     # skip live DockerSandbox integration tests
+npm install                                              # first run only
+
+npm test                                                 # full suite — 295 tests across 35 suites (incl. live DockerSandbox)
+npm test -- --testPathIgnorePatterns='DockerSandbox'     # skip live DockerSandbox integration test (what CI runs)
+npx tsc --noEmit                                         # type-check
 ```
+
+The full `npm test` invocation includes a real DockerSandbox integration
+test that spawns containers via `dockerode` — it needs Docker Desktop
+running and the sandbox image built (`docker compose build sandbox` or
+`docker compose up --build` once is enough). CI skips that one test
+(`testPathIgnorePatterns='DockerSandbox'`) because the runner has no
+local Docker daemon to spawn into; the SQLite integration tests still
+run there because they use `node:sqlite`'s in-memory mode.
 
 Coverage spans domain invariants and state machines, lcov parsing,
 framework detection, AST validation, SQLite round-trips, queue
