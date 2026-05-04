@@ -14,43 +14,6 @@ services:
     command: ["true"]
     restart: "no"
 
-  # Init container: probes external DNS readiness and exits 0 once the
-  # three hosts the backend needs (api.github.com, api.anthropic.com,
-  # registry.npmjs.org) all resolve. Closes a cold-start race where
-  # Docker's embedded DNS resolver (127.0.0.11) is up before its upstream
-  # gateway is fully online — the backend's `onModuleInit` PAT
-  # validation hits api.github.com inside that window and crashes with
-  # `getaddrinfo EAI_AGAIN`. Gating the backend on this service via
-  # `service_completed_successfully` makes "docker compose up --build"
-  # a deterministic first-run on cold daemons, CI runners, and machines
-  # with finicky DNS (corporate VPN, split-DNS, etc.).
-  #
-  # Probing all three hosts (not just api.github.com) doubles as a
-  # fail-fast at boot: if egress to npm or Anthropic is blocked, the
-  # operator sees it in seconds at startup instead of 5 minutes into
-  # the first job. Same "cheap-check-before-expensive-op" pattern used
-  # everywhere else in the orchestration.
-  network-ready:
-    image: busybox:1.36
-    command: >
-      sh -c '
-        set -e
-        for host in api.github.com api.anthropic.com registry.npmjs.org; do
-          echo "[network-ready] resolving $$host..."
-          n=0
-          until nslookup "$$host" >/dev/null 2>&1; do
-            n=$$((n+1))
-            if [ $$n -ge 30 ]; then
-              echo "[network-ready] $$host did not resolve within 30s — failing fast"
-              exit 1
-            fi
-            sleep 1
-          done
-          echo "[network-ready] $$host: OK"
-        done
-      '
-    restart: "no"
-
   backend:
     build:
       context: ./backend
@@ -58,8 +21,6 @@ services:
     image: coverage-improver-backend:latest
     depends_on:
       sandbox:
-        condition: service_completed_successfully
-      network-ready:
         condition: service_completed_successfully
     environment:
       PORT: 3000

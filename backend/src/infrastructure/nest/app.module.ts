@@ -39,6 +39,7 @@ import { DeleteJob } from '@application/usecases/DeleteJob';
 import { RepositoriesController } from './RepositoriesController';
 import { JobsController } from './JobsController';
 import { ConfigController } from './ConfigController';
+import { formatGithubBootError, retryOnTransientNetwork } from './bootValidatorRetry';
 
 @Module({
   controllers: [RepositoriesController, JobsController, ConfigController],
@@ -390,17 +391,26 @@ export class AppModule implements OnModuleInit, OnModuleDestroy {
    *  - Sandbox readiness: docker daemon reachable + image present.
    * Either failure throws → Nest aborts boot with a clear message.
    *
+   * The PAT call goes through `retryOnTransientNetwork` because Docker's
+   * embedded DNS resolver (127.0.0.11) can return `EAI_AGAIN` for the first
+   * external lookup right after a cold container start — the constant
+   * literally means "try again later" and is exactly what retries are for.
+   * Auth errors (HTTP 4xx) are NOT retried; they fail immediately with a
+   * scope-focused message. Network errors are reported with a network-focused
+   * message so the operator doesn't waste time investigating their token.
+   *
    * After validation passes, recover any `pending` work persisted from a
    * previous process. The SqliteConnection factory already handled
    * `running`-row reconciliation (marked them `failed`); this step
    * re-enqueues `pending` rows that never got picked up before the restart.
    */
   async onModuleInit(): Promise<void> {
-    const login = await this.github.whoami().catch((e: Error) => {
-      throw new Error(
-        `GitHub PAT validation failed: ${e.message}. Check GITHUB_TOKEN scope (need 'repo') and that the token has not expired.`,
-      );
-    });
+    let login: string;
+    try {
+      login = await retryOnTransientNetwork(() => this.github.whoami());
+    } catch (e) {
+      throw new Error(formatGithubBootError(e));
+    }
     this.logger.log(`GitHub auth OK — bot user: ${login}`);
 
     await this.sandbox.assertReady();
