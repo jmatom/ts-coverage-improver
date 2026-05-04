@@ -1,6 +1,6 @@
-# Defense Brief — TS Coverage Improver
+# Design Notes — TS Coverage Improver
 
-A reading-order narrative for the take-home interview demo. Skip the architecture-pattern slides; this is the **business story**: what the product does, why each piece exists, and which trade-offs you can defend.
+End-to-end design rationale: what the product does, why each piece exists, and the trade-offs taken at each layer. Reads top-to-bottom; each section is self-contained for reference.
 
 ---
 
@@ -24,8 +24,7 @@ The dashboard shows a ranked list of files with poor coverage.
 
 The threshold is configurable — default 80% per the spec example. Lowest coverage shows first.
 
-**Trade-off you can defend:** *Why run the tests ourselves rather than fetching from Coveralls / Codecov?*
-Answer: we have to re-run the tests later anyway (to validate the AI's work — see Q2), so adding an external dependency for the *initial* scan is code with no payoff. One mechanism, used twice.
+**Trade-off:** *Why run the tests ourselves rather than fetching from Coveralls / Codecov?* The tests have to run again later anyway (to validate the AI's work — see Q2), so adding an external dependency for the *initial* scan is code with no payoff. One mechanism, used twice.
 
 **Empty-suite handling — the "every project starts at zero" case.** A repo with no tests is a legitimate baseline (the demo target starts here), but jest/vitest exit non-zero on "no tests found" and the flow would short-circuit with a useless error. Inside the disposable workdir, `EmptySuiteHandling` plants a placeholder test so the runner exits 0, and adds coverage flags so lcov lists every source file at 0% — giving the dashboard rows the user can click Improve on. Two subtleties: (a) the per-framework `defaultTestCmd` bypasses the project's `scripts.test` entirely in this mode, because routing flags through `npm test --` is unreliable (some wrappers strip args, others have their own `--`); (b) Mocha skips the placeholder (it exits 0 on empty suites natively) and the wrapper flags get spliced *before* the `mocha` argv token so nyc/c8 actually receive them.
 
@@ -60,8 +59,7 @@ Failures split into two categories that need different responses:
 
 This is why sibling fallback is **conditional**. We don't burn another sandbox spawn on a problem the spawn won't solve.
 
-**Trade-off you can defend:** *Why not always fall back to sibling?*
-Spawning a Docker container is expensive (network, CPU, API tokens). For behavioral failures the second sandbox produces the same useless output. Honest failure with logs > silent success masquerading as a useful PR.
+**Trade-off:** *Why not always fall back to sibling?* Spawning a Docker container is expensive (network, CPU, API tokens). For behavioral failures the second sandbox produces the same useless output. Honest failure with logs beats silent success masquerading as a useful PR.
 
 ### 4. "How do we get the result back to the user as a PR?"
 
@@ -93,7 +91,7 @@ A pattern that shows up everywhere in the orchestration:
 | `whoami()` at boot | The first job discovering the PAT expired hours after deploy |
 | `assertReady()` at boot | The first job discovering the sandbox image isn't built |
 
-These scale from a 3-day demo to a real internal tool. Operators don't see "first improvement failed mysteriously" — they see actionable errors at startup.
+These scale from a single-author proof-of-concept to a real internal tool. Operators don't see "first improvement failed mysteriously" — they see actionable errors at startup.
 
 ---
 
@@ -111,7 +109,7 @@ Both happen in a **disposable Docker container per job**:
 - **Hard timeout:** container killed if it exceeds the job budget.
 - **Disposable:** container destroyed on completion, success or failure.
 
-**Roadmap (documented limitation):** custom bridge with iptables egress allow-list (only GitHub + Anthropic API + npm registry reachable). The current setup is sufficient for a 3-day demo; the egress policy is Linux-distribution-specific and outside the scope.
+**Documented limitation:** the next reliability win is a custom bridge with iptables egress allow-list (only GitHub + Anthropic API + npm registry reachable). The current setup is sufficient for the current scope; the egress policy is Linux-distribution-specific and was deferred.
 
 ### Process-level vs filesystem-level isolation (honest distinction)
 
@@ -181,21 +179,28 @@ production-realistic):
 Both are documented in [`concurrency-and-backpressure.md`](./concurrency-and-backpressure.md).
 
 **Stay-honest invariant:** state lives in SQLite. On process restart,
-any orphan `running` rows are reconciled to `failed` rather than
-pretended-into-existence.
+any orphan `running` row (one in `running` status with no live worker —
+unambiguous evidence of a crash, since transitions out of `running`
+only happen on a live worker) is reconciled honestly: under the
+`auto_retry_count` budget it's flipped back to `pending` and
+re-enqueued; over the budget it's hard-failed with
+`"auto-retry budget exhausted"`. Either way, the row is never
+pretended-into-existence as still running. Full mechanics in
+[Reliability — crash recovery story](#reliability--crash-recovery-story)
+below.
 
 ---
 
-## Walking the live demo
+## Demo flow
 
-Recorded happy-path backup: **https://youtu.be/LGqJd7-IKx8** — ~3 min, end-to-end against the [`jmatom/ts-coverage-demo`](https://github.com/jmatom/ts-coverage-demo) calculator repo. If the live run hits a network or PAT issue, the video covers the same beats.
+Recorded walkthrough: **https://youtu.be/LGqJd7-IKx8** — ~3 min, end-to-end against the [`jmatom/ts-coverage-demo`](https://github.com/jmatom/ts-coverage-demo) calculator repo. Useful if the local stack isn't running.
 
-Step by step, what to point at and what each step proves:
+Step by step, what the user does and what each step demonstrates:
 
-1. **`docker compose up --build`** — sandbox image builds before backend; backend boots; PAT gets validated; sandbox readiness is checked. *Proves:* boot-time validation; if anything is misconfigured you see it in 3 seconds, not 3 minutes into the demo.
-2. **Add a repo** — `RegisterRepository` validates the URL, fetches metadata, persists. *Proves:* fast-fail on inaccessible / fork-disabled repos at registration time.
-3. **Click Re-analyze** — clone + sandbox-isolated install + tests + lcov parse → coverage table appears. *Proves:* the analysis path with real isolation.
-4. **Click Improve on a low-coverage file** — a job is queued, polled at 3s, status badges flip in real time. *Proves:* per-repo serialization, background execution, live UX.
+1. **`docker compose up --build`** — sandbox image builds before backend; backend boots; PAT gets validated; sandbox readiness is checked. *Demonstrates:* boot-time validation; misconfiguration surfaces in 3 seconds at startup, not 3 minutes into the run.
+2. **Add a repo** — `RegisterRepository` validates the URL, fetches metadata, persists. *Demonstrates:* fast-fail on inaccessible / fork-disabled repos at registration time.
+3. **Click Re-analyze** — clone + sandbox-isolated install + tests + lcov parse → coverage table appears. *Demonstrates:* the analysis path with real isolation.
+4. **Click Improve on a low-coverage file** — a job is queued, polled at 3s, status badges flip in real time. *Demonstrates:* per-repo serialization, background execution, live UX.
 5. **Watch the job-detail logs** — every step has a timestamp:
    - Cloning…
    - Detected framework: jest
@@ -205,8 +210,8 @@ Step by step, what to point at and what each step proves:
    - Coverage delta: 42% → 91%
    - Pushing branch…
    - PR opened: <url>
-   *Proves:* the multi-gate pipeline is visible and auditable.
-6. **The PR link goes live** — clicking it lands on a real GitHub PR with a clean diff and a `42% → 91%` description. *Proves:* the whole loop closes.
+   *Demonstrates:* the multi-gate pipeline is visible and auditable.
+6. **The PR link goes live** — clicking it lands on a real GitHub PR with a clean diff and a `42% → 91%` description. *Demonstrates:* the whole loop closes.
 
 ---
 
@@ -226,7 +231,7 @@ Every architectural choice traces back to a line in the spec or a real engineeri
 | "run in the background" | `InMemoryPerRepoQueue` with SQLite persistence |
 | "Domain, Application, Infrastructure layers" | `backend/src/{domain,application,infrastructure}/` — domain has zero framework imports |
 | "framework-independent" business logic | Domain + application import only domain ports + Node `fs`/`path` — no `simple-git`, no `@octokit`, no `dockerode`, no `typescript` compiler |
-| "Model entities, value objects, and domain services" | Aggregates organized by bounded context (`coverage`, `job`, `repository`); domain services as plain pure modules (`LcovParser`, `testFileNaming`); value objects introduced *selectively* where they replace duplicated invariant checks: **`JobStatusValue`** owns the lifecycle transition table (replaces 4 inline status guards in `ImprovementJob`), **`CoveragePercentage`** validates the `[0, 100]` range once (replaces inline `assertPct` checks in `FileCoverage`), **`Subpath`** centralizes the path-traversal guard (replaces `Repository.normalizeSubpath`). Wholesale primitive-wrapping (`JobId`, `CommitSha`, `BranchName`) deferred — diminishing returns at this scale, would dilute the meaning of the load-bearing VOs |
+| "Model entities, value objects, and domain services" | One bounded context (Coverage Improvement) — single shared model, single schema, single ubiquitous language, no anti-corruption layers because there's nothing on the other side. Within it, three aggregates organized by responsibility into folders (`domain/repository/`, `domain/coverage/`, `domain/job/`) for code locality — not separate contexts. Domain services as plain pure modules (`LcovParser`, `testFileNaming`); value objects introduced *selectively* where they replace duplicated invariant checks: **`RepositoryId`** and **`JobId`** are wrapped IDs at the controller boundary, **`JobStatusValue`** owns the lifecycle transition table (replaces 4 inline status guards in `ImprovementJob`), **`CoveragePercentage`** validates the `[0, 100]` range once (replaces inline `assertPct` checks in `FileCoverage`), **`Subpath`** centralizes the path-traversal guard. Wholesale primitive-wrapping of `CommitSha` / `BranchName` deferred — diminishing returns at this scale, would dilute the meaning of the load-bearing VOs |
 | "isolate AI CLI runs" | Disposable Docker container per job; FS isolation + NAT bridge + timeout |
 | "secure tokens and secrets" | Tokens via env at boot only; never logged; passed to sandbox via env vars |
 | "serialize jobs per repository" | `InMemoryPerRepoQueue` per-repo promise chain |
@@ -234,30 +239,30 @@ Every architectural choice traces back to a line in the spec or a real engineeri
 
 ---
 
-## Common questions you might get + crisp answers
+## Design rationale FAQ
 
 **Q: Why SQLite and not Postgres?**
-Spec required SQLite. Honest answer: for a single-process demo with low write rate, the operational simplicity is right. SQLite via `node:sqlite` (Node 24's built-in) — no native compile, no external service.
+The spec required SQLite. For a single-process workload with a low write rate, the operational simplicity is right. SQLite via `node:sqlite` (Node 24's built-in) — no native compile, no external service.
 
 **Q: Why no Redis / Bull queue?**
-Per-repo serialization can be enforced with an in-process promise chain (`Map<repoId, Promise>`). Job state is persisted in SQLite. Adding Redis would buy us multi-process job execution, which the spec doesn't ask for and a 3-day demo doesn't need.
+Per-repo serialization can be enforced with an in-process promise chain (`Map<repoId, Promise>`). Job state is persisted in SQLite. Adding Redis would buy multi-process job execution, which the spec doesn't require and the current scope doesn't need. The seam to swap it in later is already cut — see ["Improvements for production"](#improvements-for-production).
 
 **Q: What if the AI outputs an infinite loop in a test?**
 Each sandbox `run` has a hard timeout — for the test phase, 10 minutes. The container is killed via `SIGKILL` and the attempt fails with exit code 124. The orchestrator then retries with feedback or fails the job honestly.
 
-**Q: How do you handle the docker-socket-mount security trade-off?**
-Documented as a known limitation. The backend mounts `/var/run/docker.sock` to spawn sandbox containers — this gives the backend container effective root on the host. Production answer: sysbox or rootless Docker-in-Docker. For a 3-day demo, the simplicity wins; the constraint is called out in the README under "Documented limitations."
+**Q: How is the docker-socket-mount security trade-off handled?**
+Documented as a known limitation. The backend mounts `/var/run/docker.sock` to spawn sandbox containers — this gives the backend container effective root on the host. The production answer is sysbox or rootless Docker-in-Docker. For the current scope the simplicity wins; the constraint is called out in the README under "Documented limitations."
 
-**Q: What if a repo's `npm install` won't work in your sandbox?**
-The job ends `failed` with logs. The README says "demo target chosen for clean install; arbitrary repos may need manual setup." Honest behavior, not silent corruption.
+**Q: What if a repo's `npm install` won't work in the sandbox?**
+The job ends `failed` with logs. The README notes that the demo target was chosen for clean install; arbitrary repos may need manual setup. Honest behavior, not silent corruption.
 
 **Q: Why "append" rather than "rewrite the test file"?**
 Append preserves existing tests verbatim — the AST validator enforces this. Rewrite would mean trusting the AI to also re-derive the existing test logic, which is a much higher bar. Sibling fallback exists for the cases where append can't merge cleanly.
 
-**Q: How does your design handle a 100-engineer team using this?**
+**Q: How does the design scale to a 100-engineer team using this?**
 Two scaling axes:
 1. **Multiple repos in flight**: cross-repo concurrency happens for free — different chains, different sandboxes.
-2. **Multiple jobs per repo**: serialized by design — invariant comes from the spec ("serialize per repository"). If we needed multi-process job execution, swap `InMemoryPerRepoQueue` for a Redis-backed implementation behind the same `JobScheduler` interface. Domain code doesn't change.
+2. **Multiple jobs per repo**: serialized by design — invariant comes from the spec ("serialize per repository"). For multi-process job execution, swap `InMemoryPerRepoQueue` for a Redis- or SQS-backed implementation behind the same `JobScheduler` interface. Domain code doesn't change.
 
 **Q: Why a coverage-delta gate? Isn't "tests pass" enough?**
 "Tests pass" doesn't prove the test exercises the file under improvement. An AI can generate a passing test with `expect(true).toBe(true)`. The coverage-delta gate is the deterministic check that the tests are meaningful — the spec word.
@@ -266,7 +271,7 @@ Two scaling axes:
 The test run fails. That's a behavioral failure → no sibling fallback → job ends `failed` with the failed import in the logs. Honest behavior. Future improvement: feed the dep list into the AI's prompt as a constraint.
 
 **Q: How does the domain/application layer log without importing `@nestjs/common`?**
-Through a `LoggerPort` defined in `domain/ports/`, with a single Nest-backed adapter (`NestLoggerFactory`) wired in `infrastructure/`. `grep "from '@nestjs/common'" backend/src/{domain,application}` returns zero hits — the rule holds end-to-end, not just for the load-bearing ports. The honest trade-off elsewhere: I deferred wrapping `CommitSha` and `BranchName` as VOs (they're still raw `string` at the boundary). The ones that earn their keep ship — `RepositoryId` and `JobId` for IDs at the controller boundary, `JobStatusValue` for the lifecycle transition table, `CoveragePercentage` for the `[0,100]` range check, `Subpath` for path-traversal — but wrapping every git-shaped primitive at this scale would dilute those load-bearing VOs without catching a real class of bug. For a long-lived codebase with a wider team, I'd add them; for a 3-day take-home with one author, the cost/value didn't pencil out.
+Through a `LoggerPort` defined in `domain/ports/`, with a single Nest-backed adapter (`NestLoggerFactory`) wired in `infrastructure/`. `grep "from '@nestjs/common'" backend/src/{domain,application}` returns zero hits — the rule holds end-to-end, not just for the load-bearing ports. The trade-off elsewhere: wrapping `CommitSha` and `BranchName` as VOs was deferred (they're still raw `string` at the boundary). The ones that earn their keep ship — `RepositoryId` and `JobId` for IDs at the controller boundary, `JobStatusValue` for the lifecycle transition table, `CoveragePercentage` for the `[0,100]` range check, `Subpath` for path-traversal — but wrapping every git-shaped primitive at this scale would dilute those load-bearing VOs without catching a real class of bug. For a long-lived codebase with a wider team they'd be added; for the current scope, the cost/value didn't pencil out.
 
 ---
 
@@ -355,7 +360,7 @@ For both, the API service stops touching SQLite for queue state — it just publ
 
 ## Improvements for production
 
-The current implementation is honest about its scope: a single-instance NestJS service with an in-process per-repo queue, persisting to SQLite. That shape is right for a take-home, an internal tool, or any deployment that fits on one box. For a multi-tenant production service the architecture would shift to a **decoupled command-bus + transactional-outbox pattern**.
+The current implementation is scoped honestly: a single-instance NestJS service with an in-process per-repo queue, persisting to SQLite. That shape fits a single-author proof-of-concept, an internal tool, or any deployment that runs on one box. For a multi-tenant production service the architecture would shift to a **decoupled command-bus + transactional-outbox pattern**.
 
 ### The shift in one line
 
@@ -431,9 +436,9 @@ That last point is the architectural payoff: by treating the queue as a port fro
 
 ---
 
-## What I'd do next (genuine roadmap, not hand-waving)
+## Follow-ups
 
-These are honest follow-ups, ordered by value:
+Smaller incremental improvements that didn't make the current scope. Ordered by value:
 
 1. **Egress allow-list on the sandbox network** — custom bridge + iptables rules. Only GitHub + Anthropic API + npm registry reachable. Closes the network-policy gap noted in `docs/security.md`.
 2. **Branch-coverage targeting** — the lcov format includes BRDA records for individual branch outcomes. We could pass uncovered *branches* (not just lines) to the AI for partially-covered files. Higher-quality test generation; uses data we already have.
@@ -444,6 +449,6 @@ These are honest follow-ups, ordered by value:
 
 ---
 
-## Closing line for the interview
+## Summary
 
-> *"The hard part of this challenge wasn't the integration with GitHub or the AI CLI — those are well-documented APIs. The hard part was making the AI's output trustworthy. Three independent gates, conditional fallback based on failure class, fast-fail at every stage that's cheaper than the next one — that's what makes the difference between a demo that opens a PR and a demo that opens a PR you'd actually merge."*
+The hard part of this product wasn't the integration with GitHub or the AI CLI — those are well-documented APIs. The hard part was making the AI's output trustworthy. Three independent gates, conditional fallback based on failure class, and fast-fail at every stage that's cheaper than the next one — that's the difference between a tool that opens a PR and a tool that opens a PR worth merging.
