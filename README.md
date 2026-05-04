@@ -162,7 +162,7 @@ logic against mocked ports.
 | Test-runner detection + coverage calculation | [docs/coverage-detection.md](docs/coverage-detection.md) |
 | Architecture — system diagram + request-flow sequence | [docs/architecture.md](docs/architecture.md) |
 | Domain glossary | [docs/domain-glossary.md](docs/domain-glossary.md) |
-| Defense brief — narrative for the live demo | [docs/defense.md](docs/defense.md) |
+| Design notes — end-to-end design rationale and trade-offs | [docs/design-notes.md](docs/design-notes.md) |
 
 ## License
 
