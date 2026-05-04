@@ -57,9 +57,9 @@ Failures split into two categories that need different responses:
 | **Structural** | AI broke file syntax; AI deleted an existing test | File-merge problem — AI struggling to integrate cleanly | **Write a sibling file instead** (`foo.generated.test.ts`). Fresh canvas removes the merge dimension. |
 | **Behavioral** | AI added nothing new; tests fail; coverage didn't move | AI not generating *meaningful logic* | **Stop trying.** Fail honestly with logs. A fresh file won't fix the AI's output. |
 
-This is why sibling fallback is **conditional**. We don't burn another sandbox spawn on a problem the spawn won't solve.
+This is why sibling fallback is **conditional**. The fallback is reserved for the failure class where it changes the AI's task; for the class where it doesn't, the cost isn't justified by the (low) expected probability of a different outcome.
 
-**Trade-off:** *Why not always fall back to sibling?* Spawning a Docker container is expensive (network, CPU, API tokens). For behavioral failures the second sandbox produces the same useless output. Honest failure with logs beats silent success masquerading as a useful PR.
+**Trade-off:** *Why not always fall back to sibling?* Two reasons. (1) Each sandbox spawn costs network + CPU + API tokens. (2) Sibling mode meaningfully changes the AI's *task* on structural failures — a fresh canvas removes the file-merge dimension — but not on behavioral failures, where the AI's input (source file, uncovered lines, prompt) is the same either way; only the output destination changes. So sibling-after-behavioral is closer to "re-roll the same dice" than "try a different approach." LLMs are stochastic, so it isn't *guaranteed* useless — but the in-mode retry loop (up to N=2, with the previous failure fed back as `retryFeedback`) already burns that stochasticity once. Spending another full sandbox spawn on a low-EV re-roll is the user's call to make, not the system's; failing honestly with per-attempt logs lets the user re-trigger manually if they want to gamble.
 
 ### 4. "How do we get the result back to the user as a PR?"
 
