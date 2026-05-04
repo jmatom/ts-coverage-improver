@@ -256,6 +256,9 @@ Documented as a known limitation. The backend mounts `/var/run/docker.sock` to s
 **Q: What if a repo's `npm install` won't work in the sandbox?**
 The job ends `failed` with logs. The README notes that the demo target was chosen for clean install; arbitrary repos may need manual setup. Honest behavior, not silent corruption.
 
+**Q: Why a pre-baked sandbox image with several Node versions, instead of building a per-repo image based on `.nvmrc` / `engines.node`?**
+Three reasons. (1) **Cold-start latency.** Spawning a container from the pre-baked image is ~1-2s. Building or pulling a per-repo image at job time would add 30-90s of pure waiting before any useful work begins. (2) **No registry dependency at job time.** The pre-baked image is pulled once at `docker compose up`; jobs never touch a registry afterward. A per-repo strategy would need either a build step (Docker daemon trust at job time, slow) or a pull (egress, rate-limit, registry uptime) — all extra failure modes for the user-facing flow. (3) **Image hygiene.** A per-repo strategy creates a long tail of build artifacts that would need cache, GC, retention policy, and registry credentials to manage. The pre-baked approach sidesteps all of that. The trade-off: the image is ~400MB (Node 18/20/22/24 baked via fnm) and only those four majors are supported — out-of-band pins (Node 16 EOL, Node 23 odd-numbered dev) fall back to baked Node 20 with a logged warning. The fnm wrapper only kicks in when a pin is detected; pinless projects pay zero overhead.
+
 **Q: Why "append" rather than "rewrite the test file"?**
 Append preserves existing tests verbatim — the AST validator enforces this. Rewrite would mean trusting the AI to also re-derive the existing test logic, which is a much higher bar. Sibling fallback exists for the cases where append can't merge cleanly.
 
